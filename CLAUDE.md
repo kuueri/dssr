@@ -32,8 +32,10 @@ dssr is pull-only: it reaches each source only through the source's OAI-PMH endp
 ## Architecture
 
 `dssr serve` is the single owner of the Bleve index, because bbolt holds an exclusive file lock.
-Every subcommand except `uninstall` is an HTTP client of the admin unix socket (`call` in `cmd/dssr/main.go`), so it needs a running `serve`.
-`dssr uninstall` stops the service and removes the installation from the host, so it runs as root and does not contact `serve`.
+Every subcommand except `update` and `uninstall` is an HTTP client of the admin unix socket (`call` in `cmd/dssr/main.go`), so it needs a running `serve`.
+`dssr update` runs `install.sh` from the tag of the latest release with `DSSR_VERSION` set, never from `main`, so the installer matches the release files.
+`dssr uninstall` stops the service and removes the installation from the host.
+Both run as root and do not contact `serve`.
 
 A harvest flows through `harvest` (schedule), `oai` (`ListRecords` paging), `record` (`dim` whitelist mapping), and `index` (Bleve documents).
 Each document stores the full record as JSON in the unindexed field `record`, and search results and record lookups return that JSON.

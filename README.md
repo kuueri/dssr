@@ -26,8 +26,6 @@ At the end, the script shows the client token one time.
 dssr keeps only the hash of the token, so store the token immediately.
 
 To install a specific release, add `DSSR_VERSION=0.1.0` after `sudo`.
-To upgrade, run the same command again.
-The upgrade keeps `/etc/dssr/dssr.yaml`, so it does not need `DSSR_OAI_URL`.
 
 dssr listens on `127.0.0.1:8080` and does not use TLS.
 Put a TLS reverse proxy in front of dssr before other hosts use the API.
@@ -54,6 +52,18 @@ printf '%s' "$TOKEN" | sha256sum
 ```
 
 Add the hash to `clients`, restart dssr, and give the token to the client service.
+
+## Update
+
+Run this command as root:
+
+```bash
+sudo dssr update
+```
+
+It installs the latest release if that release is newer than the installed version.
+dssr runs `install.sh` from the tag of the release, not from `main`, so the script and the release files have the same version.
+The update keeps `/etc/dssr/dssr.yaml` and restarts dssr.
 
 ## Uninstall
 
