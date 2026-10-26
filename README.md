@@ -55,6 +55,19 @@ printf '%s' "$TOKEN" | sha256sum
 
 Add the hash to `clients`, restart dssr, and give the token to the client service.
 
+## Uninstall
+
+Run this command as root:
+
+```bash
+sudo dssr uninstall
+```
+
+It stops and disables the service, then removes the systemd unit, `/usr/local/bin/dssr`, `/usr/local/share/doc/dssr`, `/etc/dssr`, `/var/lib/dssr`, the index at `index_path`, the socket at `admin_socket`, and the `dssr` user and group, including the user's mail spool.
+It deletes every harvested record, so the action cannot be undone.
+If a step fails, it keeps `/usr/local/bin/dssr`, so you can correct the cause and run the command again.
+The system journal keeps the old `dssr` entries, because journald has no per-unit deletion.
+
 ## Use
 
 On the server, run the `dssr` subcommands as the `dssr` user:
