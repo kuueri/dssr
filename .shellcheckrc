@@ -1,0 +1,5 @@
+shell=bash
+enable=all
+# SC2250 wants braces on every variable, and SC2312 flags masked returns, which are reviewed case by case.
+disable=SC2250
+disable=SC2312
