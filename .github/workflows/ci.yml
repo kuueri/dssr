@@ -2,7 +2,25 @@ name: ci
 on:
   push:
     branches: [main]
+    paths:
+      - "**/*.go"
+      - "**/testdata/**"
+      - install.sh
+      - "scripts/**"
+      - internal/server/openapi.json
+      - go.mod
+      - go.sum
+      - .github/workflows/ci.yml
   pull_request:
+    paths:
+      - "**/*.go"
+      - "**/testdata/**"
+      - install.sh
+      - "scripts/**"
+      - internal/server/openapi.json
+      - go.mod
+      - go.sum
+      - .github/workflows/ci.yml
   workflow_call:
 permissions:
   contents: read
