@@ -1,0 +1,23 @@
+[Unit]
+Description=dssr discovery service
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=dssr
+Group=dssr
+ExecStart=/usr/local/bin/dssr serve --config /etc/dssr/dssr.yaml
+Restart=on-failure
+RestartSec=10s
+# /run/dssr holds admin.sock, /var/lib/dssr holds the index
+RuntimeDirectory=dssr
+RuntimeDirectoryMode=0700
+StateDirectory=dssr
+StateDirectoryMode=0700
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
