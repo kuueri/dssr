@@ -1,0 +1,5 @@
+/dssr
+/dssr.yaml
+/data/
+/dist/
+*.sock
