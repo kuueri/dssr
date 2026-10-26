@@ -3,6 +3,14 @@
 dssr is a discovery backend for institutional repositories, built first for a university library.
 It harvests metadata over OAI-PMH, keeps its own Bleve search index, and serves search over an HTTP API, so client services never touch the source systems.
 
+## Relationship to VuFind
+
+The problem statement comes from VuFind (<https://github.com/vufind-org/vufind>): pull records into a local search index, then answer discovery queries without querying the source per request.
+
+The approach differs, and it is platform-agnostic. VuFind is a PHP portal with a UI, Solr, ILS drivers, and a separate OAI-PMH harvester; dssr is a headless Go backend with an embedded Bleve index and an HTTP API as its only interface. Any source that exposes OAI-PMH with the mapped metadata prefix can be harvested; there is no UI and no ILS driver layer.
+
+Interoperability rests on published contracts: OAI-PMH 2.0 for harvesting, the `dim` prefix as the only mapped payload (whitelisted to `dc` fields), and OpenAPI 3.1 for the HTTP API. dssr is not a VuFind replacement.
+
 ## Workflow guardrails
 
 Never run `go build`, `go test`, `go fmt`, `git add`, or `git commit`.
