@@ -5,10 +5,20 @@ on:
 permissions:
   contents: read
 jobs:
+  verify-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          ref=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$GITHUB_REF_NAME" --jq '.object.type + " " + .object.sha')
+          [[ ${ref% *} == tag ]] || { echo "::error::$GITHUB_REF_NAME is a lightweight tag. Create it with: git tag -s $GITHUB_REF_NAME -m $GITHUB_REF_NAME"; exit 1; }
+          verified=$(gh api "repos/$GITHUB_REPOSITORY/git/tags/${ref#* }" --jq '.verification.verified')
+          [[ $verified == true ]] || { echo "::error::GitHub does not verify the signature of tag $GITHUB_REF_NAME"; exit 1; }
+        env:
+          GH_TOKEN: ${{ github.token }}
   test:
     uses: ./.github/workflows/ci.yml
   release:
-    needs: test
+    needs: [verify-tag, test]
     runs-on: ubuntu-latest
     permissions:
       contents: write
