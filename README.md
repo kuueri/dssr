@@ -1,16 +1,17 @@
 # dssr
 
-dssr harvests metadata from repositories over OAI-PMH, keeps its own search index, and serves search over an HTTP API.
+dssr harvests metadata from any OAI-PMH data provider, keeps its own search index, and serves search over an HTTP API.
 Client services search dssr, so they do not need access to the source systems.
 dssr only reads the OAI-PMH endpoint of each source.
+At this time, dssr maps the `dim` metadata format, which DSpace supplies.
 
 ## Install
 
 On a Linux server with systemd, run this command.
-Replace the URL with the OAI-PMH base URL of your repository:
+Replace the URL with the OAI-PMH base URL of your source:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/kuueri/dssr/main/install.sh | sudo DSSR_OAI_URL=https://repository.example.org/oai/request bash
+curl -fsSL https://raw.githubusercontent.com/kuueri/dssr/main/install.sh | sudo DSSR_OAI_URL=https://example.org/oai/request bash
 ```
 
 The script does these steps:
@@ -89,7 +90,7 @@ curl -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:8080/v1/search?q=wisata
 ## Important behavior
 
 - Data in dssr is only as fresh as the OAI-PMH data of the source. Set `schedule` to run after the source refreshes its OAI-PMH data.
-- An incremental harvest cannot find items that DSpace expunged. Run `dssr harvest --full` to delete them from the index.
+- An incremental harvest cannot find records that a source deleted without a deletion record, for example items that DSpace expunged. Run `dssr harvest --full` to delete them from the index.
 - A full harvest does not delete old records if it sees fewer than 90% of the indexed records. This guard keeps the index if the source fails.
 - `dssr status` shows the `dim` fields that dssr dropped. Use this list to extend the field mapping in `internal/record`.
 - The index keeps the analyzer and the index mapping from the time dssr made it. After a change to `internal/index`, stop dssr, delete the index directory, and start dssr.

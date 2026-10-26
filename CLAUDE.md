@@ -1,6 +1,6 @@
 # Project
 
-dssr is a discovery backend for institutional repositories, built first for a university library.
+dssr is a discovery backend for any OAI-PMH data provider, built first for a university library.
 It harvests metadata over OAI-PMH, keeps its own Bleve search index, and serves search over an HTTP API, so client services never touch the source systems.
 
 ## Relationship to VuFind

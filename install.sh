@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install or upgrade dssr as a systemd service from a GitHub release.
 #
-#   curl -fsSL https://raw.githubusercontent.com/kuueri/dssr/main/install.sh | sudo DSSR_OAI_URL=https://repository.example.org/oai/request bash
+#   curl -fsSL https://raw.githubusercontent.com/kuueri/dssr/main/install.sh | sudo DSSR_OAI_URL=https://example.org/oai/request bash
 #
 # Environment:
 #   DSSR_OAI_URL  OAI-PMH base URL of the first source, required when /etc/dssr/dssr.yaml does not exist
@@ -64,7 +64,7 @@ main() {
 	[[ ${EUID} -eq 0 ]] || die "run as root: curl -fsSL https://raw.githubusercontent.com/${REPO}/main/install.sh | sudo bash"
 	local url=${DSSR_OAI_URL:-}
 	if [[ ! -e ${CONF} ]]; then
-		[[ -n ${url} ]] || die "the first install needs DSSR_OAI_URL: curl -fsSL https://raw.githubusercontent.com/${REPO}/main/install.sh | sudo DSSR_OAI_URL=https://repository.example.org/oai/request bash"
+		[[ -n ${url} ]] || die "the first install needs DSSR_OAI_URL: curl -fsSL https://raw.githubusercontent.com/${REPO}/main/install.sh | sudo DSSR_OAI_URL=https://example.org/oai/request bash"
 		[[ ${url} =~ ^https?://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~/-]*)?$ ]] || die "DSSR_OAI_URL must be an http or https URL without a query"
 	fi
 	local cmd

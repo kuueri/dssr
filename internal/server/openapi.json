@@ -3,7 +3,7 @@
 	"info": {
 		"title": "dssr",
 		"version": "1",
-		"description": "Search over repository metadata harvested with OAI-PMH. Field names follow DCMI Terms."
+		"description": "Search over metadata harvested from OAI-PMH data providers. Field names follow DCMI Terms."
 	},
 	"security": [{ "bearer": [] }],
 	"paths": {
