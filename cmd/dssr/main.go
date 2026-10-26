@@ -19,6 +19,7 @@ import (
 	"os/signal"
 	"os/user"
 	"path/filepath"
+	"regexp"
 	"runtime/debug"
 	"slices"
 	"strings"
@@ -40,6 +41,7 @@ const usage = `Usage:
   dssr get     [--config dssr.yaml] <id> [--json]
   dssr status  [--config dssr.yaml] [--json]
   dssr eval    [--config dssr.yaml] <file>
+  dssr update
   dssr uninstall
   dssr --version
 `
@@ -56,6 +58,7 @@ func main() {
 		"get":       get,
 		"status":    status,
 		"eval":      eval,
+		"update":    update,
 		"uninstall": uninstall,
 	}
 	switch arg := os.Args[1]; {
@@ -453,6 +456,85 @@ func eval(args []string) error {
 		return errors.New("hit@10 is below 80%")
 	}
 	return nil
+}
+
+const (
+	latestReleaseURL = "https://api.github.com/repos/kuueri/dssr/releases/latest"
+	installScriptURL = "https://raw.githubusercontent.com/kuueri/dssr/refs/tags/%s/install.sh"
+)
+
+var versionRE = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
+
+func update(args []string) error {
+	flags := flag.NewFlagSet("update", flag.ExitOnError)
+	flags.Usage = func() { fmt.Fprint(os.Stderr, usage) }
+	flags.Parse(args)
+	if flags.NArg() != 0 {
+		return errors.New("update takes no arguments")
+	}
+	if os.Geteuid() != 0 {
+		return errors.New("run as root: sudo dssr update")
+	}
+
+	tag, err := latestRelease(latestReleaseURL)
+	if err != nil {
+		return err
+	}
+	if !newer(tag, buildVersion) {
+		fmt.Printf("dssr %s is up to date, the latest release is %s\n", version(), tag)
+		return nil
+	}
+
+	script, err := fetch(fmt.Sprintf(installScriptURL, tag))
+	if err != nil {
+		return err
+	}
+	fmt.Printf("updating dssr %s to %s\n", version(), tag)
+	cmd := exec.Command("bash")
+	cmd.Stdin = bytes.NewReader(script)
+	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	cmd.Env = append(os.Environ(), "DSSR_VERSION="+tag)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("install.sh %s: %w", tag, err)
+	}
+	return nil
+}
+
+func latestRelease(api string) (string, error) {
+	b, err := fetch(api)
+	if err != nil {
+		return "", fmt.Errorf("find the latest release: %w", err)
+	}
+	var r struct {
+		TagName string `json:"tag_name"`
+	}
+	if err := json.Unmarshal(b, &r); err != nil {
+		return "", fmt.Errorf("find the latest release: %w", err)
+	}
+	if !versionRE.MatchString(r.TagName) {
+		return "", fmt.Errorf("the latest release tag %q is not a version like 0.1.0", r.TagName)
+	}
+	return r.TagName, nil
+}
+
+func fetch(url string) ([]byte, error) {
+	c := &http.Client{Timeout: time.Minute}
+	res, err := c.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GET %s: %s", url, res.Status)
+	}
+	return io.ReadAll(io.LimitReader(res.Body, 1<<20))
+}
+
+func newer(a, b string) bool {
+	var x, y [3]int
+	fmt.Sscanf(a, "%d.%d.%d", &x[0], &x[1], &x[2])
+	fmt.Sscanf(b, "%d.%d.%d", &y[0], &y[1], &y[2])
+	return slices.Compare(x[:], y[:]) > 0
 }
 
 const (
