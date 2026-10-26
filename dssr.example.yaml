@@ -1,0 +1,15 @@
+# Copy to dssr.yaml. Paths here suit a local run; production uses /var/lib/dssr/index and /run/dssr/admin.sock.
+listen: 127.0.0.1:8080
+index_path: ./data/index
+admin_socket: ./dssr.sock
+timezone: Asia/Jakarta
+clients:
+  # Token "change-me". Make a real one with: printf '%s' "$TOKEN" | sha256sum
+  - name: local-test
+    token_sha256: e2186dbdb1bb4193608605e84f33208765b5693b55edd4f730a719a100eeea6f
+sources:
+  - id: repo
+    name: Example Repository
+    oai_url: https://repository.example.org/oai/request
+    metadata_prefix: dim
+    schedule: "0 3 * * 1"

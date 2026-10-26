@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OAI-PMH xmlns="http://www.openarchives.org/OAI/2.0/">
+  <responseDate>2026-10-26T05:00:09Z</responseDate>
+  <request verb="ListRecords" resumptionToken="dim////100">https://repository.example.ac.id/oai/request</request>
+  <ListRecords>
+    <record>
+      <header>
+        <identifier>oai:repository.example.ac.id:123456789/58</identifier>
+        <datestamp>2022-05-06T07:08:09Z</datestamp>
+        <setSpec>col_123456789_2</setSpec>
+      </header>
+      <metadata>
+        <dim:dim xmlns:dim="http://www.dspace.org/xmlns/dspace/dim">
+          <dim:field mdschema="dc" element="title">Pakan jerami padi fermentasi</dim:field>
+        </dim:dim>
+      </metadata>
+    </record>
+    <resumptionToken completeListSize="3" cursor="100"/>
+  </ListRecords>
+</OAI-PMH>

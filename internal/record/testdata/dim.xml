@@ -1,0 +1,30 @@
+<dim:dim xmlns:dim="http://www.dspace.org/xmlns/dspace/dim" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.dspace.org/xmlns/dspace/dim http://www.dspace.org/schema/dim.xsd">
+  <dim:field mdschema="dc" element="contributor" qualifier="author">Example, Author</dim:field>
+  <dim:field mdschema="dc" element="contributor" qualifier="advisor">Example, Advisor</dim:field>
+  <dim:field mdschema="dc" element="contributor">Example, Contributor</dim:field>
+  <dim:field mdschema="dc" element="date" qualifier="accessioned">2020-11-06T02:48:52Z</dim:field>
+  <dim:field mdschema="dc" element="date" qualifier="available">2020-11-06T02:48:52Z</dim:field>
+  <dim:field mdschema="dc" element="date" qualifier="issued">2020</dim:field>
+  <dim:field mdschema="dc" element="identifier" qualifier="uri">https://repository.example.ac.id/handle/123456789/56</dim:field>
+  <dim:field mdschema="dc" element="identifier" qualifier="isbn">978-602-0000-00-0</dim:field>
+  <dim:field mdschema="dc" element="identifier" qualifier="citation">Author (2020). Analisis potensi wisata ziarah.</dim:field>
+  <dim:field mdschema="dc" element="description" qualifier="abstract" lang="id">Penelitian ini menganalisis potensi wisata ziarah.</dim:field>
+  <dim:field mdschema="dc" element="description" qualifier="abstract" lang="en">This study analyzes pilgrimage tourism.</dim:field>
+  <dim:field mdschema="dc" element="description" qualifier="provenance" lang="en">Submitted by Staff (staff@example.ac.id)</dim:field>
+  <dim:field mdschema="dc" element="description" qualifier="sponsorship">Hibah penelitian</dim:field>
+  <dim:field mdschema="dc" element="format" qualifier="extent">120 p.</dim:field>
+  <dim:field mdschema="dc" element="format" qualifier="mimetype">application/pdf</dim:field>
+  <dim:field mdschema="dc" element="language" qualifier="iso">id</dim:field>
+  <dim:field mdschema="dc" element="publisher">Universitas Islam Malang</dim:field>
+  <dim:field mdschema="dc" element="rights">Open access</dim:field>
+  <dim:field mdschema="dc" element="rights" qualifier="uri">https://creativecommons.org/licenses/by/4.0/</dim:field>
+  <dim:field mdschema="dc" element="subject">wisata ziarah</dim:field>
+  <dim:field mdschema="dc" element="subject" qualifier="ddc">338.4</dim:field>
+  <dim:field mdschema="dc" element="title">Analisis potensi wisata ziarah Malang Raya</dim:field>
+  <dim:field mdschema="dc" element="title" qualifier="alternative">Pilgrimage tourism in Greater Malang</dim:field>
+  <dim:field mdschema="dc" element="type">Thesis</dim:field>
+  <dim:field mdschema="dc" element="coverage" qualifier="spatial">Malang</dim:field>
+  <dim:field mdschema="local" element="nim">000000000</dim:field>
+  <dim:field mdschema="dc" element="relation" qualifier="ispartofseries">Skripsi;</dim:field>
+  <dim:field mdschema="dc" element="subject" lang="en">   </dim:field>
+</dim:dim>

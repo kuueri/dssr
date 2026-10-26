@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OAI-PMH xmlns="http://www.openarchives.org/OAI/2.0/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.openarchives.org/OAI/2.0/ http://www.openarchives.org/OAI/2.0/OAI-PMH.xsd">
+  <responseDate>2026-10-26T05:00:00Z</responseDate>
+  <request verb="ListRecords" metadataPrefix="dim">https://repository.example.ac.id/oai/request</request>
+  <ListRecords>
+    <record>
+      <header>
+        <identifier>oai:repository.example.ac.id:123456789/56</identifier>
+        <datestamp>2020-11-06T02:48:52Z</datestamp>
+        <setSpec>com_123456789_1</setSpec>
+        <setSpec>col_123456789_2</setSpec>
+      </header>
+      <metadata>
+        <dim:dim xmlns:dim="http://www.dspace.org/xmlns/dspace/dim" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.dspace.org/xmlns/dspace/dim http://www.dspace.org/schema/dim.xsd">
+          <dim:field mdschema="dc" element="title" lang="en_US">Analisis potensi wisata ziarah Malang Raya</dim:field>
+          <dim:field mdschema="dc" element="contributor" qualifier="author">Example, Author</dim:field>
+        </dim:dim>
+      </metadata>
+    </record>
+    <record>
+      <header status="deleted">
+        <identifier>oai:repository.example.ac.id:123456789/57</identifier>
+        <datestamp>2021-01-02T03:04:05Z</datestamp>
+      </header>
+    </record>
+    <resumptionToken completeListSize="3" cursor="0">dim////100</resumptionToken>
+  </ListRecords>
+</OAI-PMH>

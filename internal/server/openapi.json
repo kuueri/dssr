@@ -1,0 +1,256 @@
+{
+	"openapi": "3.1.0",
+	"info": {
+		"title": "dssr",
+		"version": "1",
+		"description": "Search over repository metadata harvested with OAI-PMH. Field names follow DCMI Terms."
+	},
+	"security": [{ "bearer": [] }],
+	"paths": {
+		"/v1/search": {
+			"get": {
+				"summary": "Search records",
+				"parameters": [
+					{
+						"name": "q",
+						"in": "query",
+						"required": true,
+						"description": "Plain words and \"quoted phrases\". Every word must match.",
+						"schema": { "type": "string", "maxLength": 200 }
+					},
+					{
+						"name": "type",
+						"in": "query",
+						"description": "Exact type, repeatable",
+						"schema": { "type": "array", "items": { "type": "string" } },
+						"explode": true
+					},
+					{
+						"name": "year",
+						"in": "query",
+						"description": "Single year or inclusive range",
+						"schema": { "type": "string", "pattern": "^[0-9]{4}(-[0-9]{4})?$" },
+						"example": "2020-2024"
+					},
+					{
+						"name": "collection",
+						"in": "query",
+						"description": "Exact isPartOf value, repeatable",
+						"schema": { "type": "array", "items": { "type": "string" } },
+						"explode": true
+					},
+					{
+						"name": "language",
+						"in": "query",
+						"description": "Exact language value, repeatable",
+						"schema": { "type": "array", "items": { "type": "string" } },
+						"explode": true
+					},
+					{
+						"name": "sort",
+						"in": "query",
+						"schema": {
+							"type": "string",
+							"enum": ["relevance", "newest"],
+							"default": "relevance"
+						}
+					},
+					{
+						"name": "page",
+						"in": "query",
+						"schema": { "type": "integer", "minimum": 1, "default": 1 }
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"description": "page × limit may not exceed 1000",
+						"schema": { "type": "integer", "minimum": 1, "maximum": 50, "default": 10 }
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Search result",
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/SearchResult" }
+							}
+						}
+					},
+					"400": { "$ref": "#/components/responses/Problem" },
+					"401": { "$ref": "#/components/responses/Problem" }
+				}
+			}
+		},
+		"/v1/records/{source}/{handle}": {
+			"get": {
+				"summary": "Get one record",
+				"description": "The handle may contain slashes, for example /v1/records/repo/123456789/56.",
+				"parameters": [
+					{
+						"name": "source",
+						"in": "path",
+						"required": true,
+						"schema": { "type": "string" }
+					},
+					{
+						"name": "handle",
+						"in": "path",
+						"required": true,
+						"schema": { "type": "string" }
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Record",
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/Record" }
+							}
+						}
+					},
+					"401": { "$ref": "#/components/responses/Problem" },
+					"404": { "$ref": "#/components/responses/Problem" }
+				}
+			}
+		},
+		"/healthz": {
+			"get": {
+				"summary": "Liveness check",
+				"security": [],
+				"responses": {
+					"200": {
+						"description": "ok",
+						"content": { "text/plain": { "schema": { "type": "string" } } }
+					}
+				}
+			}
+		}
+	},
+	"components": {
+		"securitySchemes": {
+			"bearer": { "type": "http", "scheme": "bearer" }
+		},
+		"responses": {
+			"Problem": {
+				"description": "RFC 9457 problem details",
+				"content": {
+					"application/problem+json": {
+						"schema": { "$ref": "#/components/schemas/Problem" }
+					}
+				}
+			}
+		},
+		"schemas": {
+			"Strings": { "type": "array", "items": { "type": "string" } },
+			"Record": {
+				"type": "object",
+				"required": ["id", "source"],
+				"description": "Fields without a value are omitted.",
+				"properties": {
+					"id": { "type": "string", "examples": ["repo:123456789/56"] },
+					"source": { "type": "string" },
+					"title": { "type": "string" },
+					"alternative": { "$ref": "#/components/schemas/Strings" },
+					"creator": { "$ref": "#/components/schemas/Strings" },
+					"contributor": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"required": ["name"],
+							"properties": {
+								"name": { "type": "string" },
+								"role": { "type": "string", "examples": ["advisor"] }
+							}
+						}
+					},
+					"issued": { "type": "string" },
+					"available": { "type": "string" },
+					"subject": { "$ref": "#/components/schemas/Strings" },
+					"abstract": {
+						"$ref": "#/components/schemas/Strings",
+						"description": "One entry per language version"
+					},
+					"description": { "$ref": "#/components/schemas/Strings" },
+					"tableOfContents": { "$ref": "#/components/schemas/Strings" },
+					"sponsorship": { "$ref": "#/components/schemas/Strings" },
+					"type": { "$ref": "#/components/schemas/Strings" },
+					"language": { "$ref": "#/components/schemas/Strings" },
+					"publisher": { "$ref": "#/components/schemas/Strings" },
+					"bibliographicCitation": { "$ref": "#/components/schemas/Strings" },
+					"identifier": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"required": ["value"],
+							"properties": {
+								"scheme": { "type": "string", "examples": ["isbn"] },
+								"value": { "type": "string" }
+							}
+						}
+					},
+					"url": { "type": "string", "format": "uri" },
+					"relation": { "$ref": "#/components/schemas/Strings" },
+					"rights": { "$ref": "#/components/schemas/Strings" },
+					"license": { "$ref": "#/components/schemas/Strings" },
+					"spatial": { "$ref": "#/components/schemas/Strings" },
+					"temporal": { "$ref": "#/components/schemas/Strings" },
+					"extent": { "$ref": "#/components/schemas/Strings" },
+					"isPartOf": {
+						"$ref": "#/components/schemas/Strings",
+						"description": "Community and collection names"
+					},
+					"modified": { "type": "string", "description": "OAI-PMH datestamp" }
+				}
+			},
+			"Hit": {
+				"allOf": [
+					{ "$ref": "#/components/schemas/Record" },
+					{
+						"type": "object",
+						"required": ["score"],
+						"properties": {
+							"highlight": {
+								"type": "object",
+								"description": "HTML fragments with <mark> around matches, for title and abstract",
+								"additionalProperties": { "$ref": "#/components/schemas/Strings" }
+							},
+							"score": { "type": "number" }
+						}
+					}
+				]
+			},
+			"Facet": {
+				"type": "object",
+				"required": ["value", "count"],
+				"properties": { "value": { "type": "string" }, "count": { "type": "integer" } }
+			},
+			"SearchResult": {
+				"type": "object",
+				"required": ["total", "page", "limit", "results", "facets"],
+				"properties": {
+					"total": { "type": "integer" },
+					"page": { "type": "integer" },
+					"limit": { "type": "integer" },
+					"results": { "type": "array", "items": { "$ref": "#/components/schemas/Hit" } },
+					"facets": {
+						"type": "object",
+						"description": "Top 10 values each for type, year, isPartOf, language, and subject",
+						"additionalProperties": {
+							"type": "array",
+							"items": { "$ref": "#/components/schemas/Facet" }
+						}
+					}
+				}
+			},
+			"Problem": {
+				"type": "object",
+				"properties": {
+					"type": { "type": "string" },
+					"title": { "type": "string" },
+					"status": { "type": "integer" },
+					"detail": { "type": "string" }
+				}
+			}
+		}
+	}
+}

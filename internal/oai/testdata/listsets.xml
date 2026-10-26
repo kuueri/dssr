@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OAI-PMH xmlns="http://www.openarchives.org/OAI/2.0/">
+  <responseDate>2026-10-26T05:00:00Z</responseDate>
+  <request verb="ListSets">https://repository.example.ac.id/oai/request</request>
+  <ListSets>
+    <set>
+      <setSpec>com_123456789_1</setSpec>
+      <setName>Fakultas Ekonomi</setName>
+    </set>
+    <set>
+      <setSpec>col_123456789_2</setSpec>
+      <setName>Skripsi Manajemen</setName>
+    </set>
+  </ListSets>
+</OAI-PMH>
