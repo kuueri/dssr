@@ -94,24 +94,13 @@ curl -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:8080/v1/search?q=wisata
 - `dssr status` shows the `dim` fields that dssr dropped. Use this list to extend the field mapping in `internal/record`.
 - The index keeps the analyzer and the index mapping from the time dssr made it. After a change to `internal/index`, stop dssr, delete the index directory, and start dssr.
 
-## Build and release
+## Build from source
 
-To build from source with Go 1.27.3 or later:
+With Go 1.27.3 or later:
 
 ```bash
 CGO_ENABLED=0 go build -trimpath -o dssr ./cmd/dssr
-go test ./...
 ```
-
-To publish a release, add a section for the version to `CHANGELOG.md`, commit it, and push a tag without `v`:
-
-```bash
-git tag 0.1.0
-git push origin main 0.1.0
-```
-
-The release workflow runs the tests, builds `dssr_linux_amd64.tar.gz` and `dssr_linux_arm64.tar.gz` with `scripts/package.sh`, and publishes the release `v0.1.0` with these archives, `checksums.txt`, and the `CHANGELOG.md` section as release notes.
-Each archive has the binary, the systemd unit file, the license, and the licenses of the dependencies.
 
 ## License
 
