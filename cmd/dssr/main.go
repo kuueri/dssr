@@ -15,7 +15,10 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"os/signal"
+	"os/user"
+	"path/filepath"
 	"runtime/debug"
 	"slices"
 	"strings"
@@ -37,6 +40,7 @@ const usage = `Usage:
   dssr get     [--config dssr.yaml] <id> [--json]
   dssr status  [--config dssr.yaml] [--json]
   dssr eval    [--config dssr.yaml] <file>
+  dssr uninstall
   dssr --version
 `
 
@@ -46,12 +50,13 @@ func main() {
 		os.Exit(2)
 	}
 	cmds := map[string]func([]string) error{
-		"serve":   serve,
-		"harvest": harvestCmd,
-		"search":  search,
-		"get":     get,
-		"status":  status,
-		"eval":    eval,
+		"serve":     serve,
+		"harvest":   harvestCmd,
+		"search":    search,
+		"get":       get,
+		"status":    status,
+		"eval":      eval,
+		"uninstall": uninstall,
 	}
 	switch arg := os.Args[1]; {
 	case arg == "--version" || arg == "-version":
@@ -448,4 +453,205 @@ func eval(args []string) error {
 		return errors.New("hit@10 is below 80%")
 	}
 	return nil
+}
+
+const (
+	unitFile   = "/etc/systemd/system/dssr.service"
+	unitDropIn = "/etc/systemd/system/dssr.service.d"
+	wantsFile  = "/etc/systemd/system/multi-user.target.wants/dssr.service"
+	binaryFile = "/usr/local/bin/dssr"
+	docDir     = "/usr/local/share/doc/dssr"
+	configDir  = "/etc/dssr"
+	configFile = "/etc/dssr/dssr.yaml"
+	stateDir   = "/var/lib/dssr"
+	runtimeDir = "/run/dssr"
+)
+
+func uninstall(args []string) error {
+	flags := flag.NewFlagSet("uninstall", flag.ExitOnError)
+	flags.Usage = func() { fmt.Fprint(os.Stderr, usage) }
+	flags.Parse(args)
+	if flags.NArg() != 0 {
+		return errors.New("uninstall takes no arguments")
+	}
+	if os.Geteuid() != 0 {
+		return errors.New("run as root: sudo dssr uninstall")
+	}
+
+	indexPath, adminSocket, err := uninstallPaths(configFile)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "dssr: warning: %v; removing the default paths\n", err)
+	}
+
+	systemctl, _ := exec.LookPath("systemctl")
+	if systemctl != "" {
+		out, err := exec.Command(systemctl, "disable", "--now", "dssr.service").CombinedOutput()
+		if err != nil && exec.Command(systemctl, "is-active", "--quiet", "dssr.service").Run() == nil {
+			return fmt.Errorf("stop dssr.service: %w: %s", err, strings.TrimSpace(string(out)))
+		}
+		if exec.Command(systemctl, "is-active", "--quiet", "dssr.service").Run() == nil {
+			return errors.New("dssr.service is still active; stop it and run uninstall again")
+		}
+	} else {
+		fmt.Fprintln(os.Stderr, "dssr: warning: systemctl not found; the service was not stopped")
+	}
+
+	var errs []error
+	remove := func(path string) {
+		if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			errs = append(errs, fmt.Errorf("remove %s: %w", path, err))
+		}
+	}
+	removeTree := func(path string) {
+		clean := filepath.Clean(path)
+		if err := checkRemovable(clean); err != nil {
+			errs = append(errs, err)
+			return
+		}
+		if err := os.RemoveAll(clean); err != nil {
+			errs = append(errs, fmt.Errorf("remove %s: %w", clean, err))
+		}
+	}
+
+	if fi, err := os.Lstat(adminSocket); err == nil && fi.Mode()&fs.ModeSocket != 0 {
+		if c, err := net.Dial("unix", adminSocket); err == nil {
+			c.Close()
+			return fmt.Errorf("%s is in use; stop dssr and run uninstall again", adminSocket)
+		}
+	}
+
+	remove(wantsFile)
+	remove(unitFile)
+	removeTree(unitDropIn)
+	if systemctl != "" {
+		if out, err := exec.Command(systemctl, "daemon-reload").CombinedOutput(); err != nil {
+			fmt.Fprintf(os.Stderr, "dssr: warning: systemctl daemon-reload: %v: %s\n", err, strings.TrimSpace(string(out)))
+		}
+		exec.Command(systemctl, "reset-failed", "dssr.service").Run()
+	}
+
+	if _, err := os.Stat(filepath.Join(indexPath, "index_meta.json")); err == nil {
+		removeTree(indexPath)
+	}
+	removeTree(stateDir)
+	if fi, err := os.Lstat(adminSocket); err == nil {
+		if fi.Mode()&fs.ModeSocket == 0 {
+			errs = append(errs, fmt.Errorf("%s is not a socket, leaving it", adminSocket))
+		} else {
+			remove(adminSocket)
+		}
+	}
+	removeTree(runtimeDir)
+
+	removeTree(configDir)
+	removeTree(docDir)
+
+	userRemoved := true
+	if _, err := user.Lookup("dssr"); err == nil {
+		if out, err := exec.Command("userdel", "dssr").CombinedOutput(); err != nil {
+			userRemoved = false
+			errs = append(errs, fmt.Errorf("userdel dssr: %w: %s", err, strings.TrimSpace(string(out))))
+		}
+	}
+	if userRemoved {
+		for _, path := range mailboxPaths("/etc/login.defs", "dssr") {
+			fi, err := os.Lstat(path)
+			if err != nil {
+				continue
+			}
+			if !fi.Mode().IsRegular() {
+				errs = append(errs, fmt.Errorf("%s is not a regular mailbox file, leaving it", path))
+				continue
+			}
+			remove(path)
+		}
+	}
+	if _, err := user.LookupGroup("dssr"); err == nil {
+		if out, err := exec.Command("groupdel", "dssr").CombinedOutput(); err != nil {
+			errs = append(errs, fmt.Errorf("groupdel dssr: %w: %s", err, strings.TrimSpace(string(out))))
+		}
+	}
+
+	if len(errs) == 0 {
+		remove(binaryFile)
+	}
+
+	for _, path := range []string{wantsFile, unitFile, unitDropIn, binaryFile, docDir, configFile, configDir, stateDir, runtimeDir, indexPath, adminSocket} {
+		if _, err := os.Lstat(path); err == nil {
+			errs = append(errs, fmt.Errorf("%s still exists", path))
+		}
+	}
+	if _, err := user.Lookup("dssr"); err == nil {
+		errs = append(errs, errors.New("user dssr still exists"))
+	}
+	if _, err := user.LookupGroup("dssr"); err == nil {
+		errs = append(errs, errors.New("group dssr still exists"))
+	}
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+	fmt.Println("dssr uninstalled")
+	fmt.Println("journald keeps past dssr entries in the system journal; it cannot delete one unit's history")
+	return nil
+}
+
+func uninstallPaths(path string) (indexPath, adminSocket string, err error) {
+	indexPath = filepath.Join(stateDir, "index")
+	adminSocket = filepath.Join(runtimeDir, "admin.sock")
+	b, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return indexPath, adminSocket, nil
+	}
+	if err != nil {
+		return indexPath, adminSocket, err
+	}
+	var c struct {
+		IndexPath   string `yaml:"index_path"`
+		AdminSocket string `yaml:"admin_socket"`
+	}
+	if err := yaml.Unmarshal(b, &c); err != nil {
+		return indexPath, adminSocket, fmt.Errorf("%s: %w", path, err)
+	}
+	if c.IndexPath != "" {
+		indexPath = c.IndexPath
+	}
+	if c.AdminSocket != "" {
+		adminSocket = c.AdminSocket
+	}
+	return indexPath, adminSocket, nil
+}
+
+func checkRemovable(path string) error {
+	clean := filepath.Clean(path)
+	if !filepath.IsAbs(clean) || strings.Count(clean, "/") < 2 {
+		return fmt.Errorf("refusing to remove %q", path)
+	}
+	switch clean {
+	case "/bin", "/boot", "/dev", "/etc", "/home", "/lib", "/lib64", "/media", "/mnt", "/opt", "/proc", "/root", "/run", "/sbin", "/srv", "/sys", "/tmp", "/usr", "/var",
+		"/etc/systemd", "/etc/systemd/system",
+		"/usr/local", "/usr/local/bin", "/usr/local/share", "/usr/share",
+		"/var/lib", "/var/log", "/var/cache", "/var/spool", "/var/tmp":
+		return fmt.Errorf("refusing to remove %q", path)
+	}
+	return nil
+}
+
+func mailboxPaths(loginDefs, name string) []string {
+	var dirs []string
+	if b, err := os.ReadFile(loginDefs); err == nil {
+		for line := range strings.SplitSeq(string(b), "\n") {
+			f := strings.Fields(line)
+			if len(f) >= 2 && f[0] == "MAIL_DIR" && filepath.IsAbs(f[1]) {
+				dirs = append(dirs, f[1])
+			}
+		}
+	}
+	if len(dirs) == 0 {
+		dirs = []string{"/var/mail", "/var/spool/mail"}
+	}
+	paths := make([]string, 0, len(dirs))
+	for _, dir := range dirs {
+		paths = append(paths, filepath.Join(dir, name))
+	}
+	return paths
 }
