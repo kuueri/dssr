@@ -55,7 +55,7 @@ sources:
   - id: repo
     name: "${host}"
     oai_url: "${url}"
-    metadata_prefix: dim
+    metadata_prefix: oai_dc
     schedule: "0 3 * * 1"
 EOF
 	install -m 0640 -o root -g dssr "${tmp}" "${CONF}"

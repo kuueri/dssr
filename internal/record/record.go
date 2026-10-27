@@ -93,6 +93,49 @@ func FromDIM(metadata []byte) (Record, []string, error) {
 	return r, dropped, nil
 }
 
+const dcNamespace = "http://purl.org/dc/elements/1.1/"
+
+func FromOAIDC(metadata []byte) (Record, []string, error) {
+	var d struct {
+		Elements []struct {
+			XMLName xml.Name
+			Value   string `xml:",chardata"`
+		} `xml:",any"`
+	}
+	if err := xml.Unmarshal(metadata, &d); err != nil {
+		return Record{}, nil, err
+	}
+	var r Record
+	var dropped []string
+	for _, e := range d.Elements {
+		v := strings.TrimSpace(e.Value)
+		if v == "" {
+			continue
+		}
+		if e.XMLName.Space != dcNamespace {
+			dropped = append(dropped, e.XMLName.Local)
+			continue
+		}
+		f := field{Schema: "dc"}
+		f.Element, f.Qualifier, _ = strings.Cut(e.XMLName.Local, "_")
+		switch {
+		case f.Element == "date" && f.Qualifier == "":
+			if r.Issued == "" || v < r.Issued {
+				r.Issued = v
+			}
+			continue
+		case f.Element == "identifier" && f.Qualifier == "" && (strings.HasPrefix(v, "http://") || strings.HasPrefix(v, "https://")):
+			f.Qualifier = "uri"
+		case f.Element == "description" && f.Qualifier == "":
+			f.Qualifier = "abstract"
+		}
+		if !r.add(f, v) {
+			dropped = append(dropped, f.key())
+		}
+	}
+	return r, dropped, nil
+}
+
 func (r *Record) add(f field, v string) bool {
 	if f.Schema != "dc" {
 		return false

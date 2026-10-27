@@ -11,5 +11,5 @@ sources:
   - id: repo
     name: Example Source
     oai_url: https://example.org/oai/request
-    metadata_prefix: dim
+    metadata_prefix: oai_dc
     schedule: "0 3 * * 1"

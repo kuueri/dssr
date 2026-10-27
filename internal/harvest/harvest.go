@@ -204,6 +204,10 @@ func (h *Harvester) harvest(src config.Source, full bool, run *Run, dropped map[
 		}
 	}
 
+	parse := record.FromDIM
+	if src.MetadataPrefix == "oai_dc" {
+		parse = record.FromOAIDC
+	}
 	date, err := c.ListRecords(h.ctx, src.MetadataPrefix, from, func(page []oai.Record) error {
 		var ups []record.Record
 		var dels []string
@@ -213,7 +217,7 @@ func (h *Harvester) harvest(src config.Source, full bool, run *Run, dropped map[
 				dels = append(dels, id)
 				continue
 			}
-			rec, drop, err := record.FromDIM(r.Metadata.XML)
+			rec, drop, err := parse(r.Metadata.XML)
 			if err != nil {
 				return fmt.Errorf("%s: %w", r.Header.Identifier, err)
 			}

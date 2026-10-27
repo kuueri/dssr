@@ -79,7 +79,8 @@ func (c *Config) validate() error {
 		return errors.New("at least one source is required")
 	}
 	seen := map[string]bool{}
-	for _, s := range c.Sources {
+	for i := range c.Sources {
+		s := &c.Sources[i]
 		if !sourceID.MatchString(s.ID) {
 			return fmt.Errorf("source id %q must match %s", s.ID, sourceID)
 		}
@@ -90,8 +91,11 @@ func (c *Config) validate() error {
 		if u, err := url.Parse(s.OAIURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 			return fmt.Errorf("source %q: oai_url must be an http or https URL", s.ID)
 		}
-		if s.MetadataPrefix != "dim" {
-			return fmt.Errorf("source %q: metadata_prefix must be dim, the only mapped format", s.ID)
+		if s.MetadataPrefix == "" {
+			s.MetadataPrefix = "oai_dc"
+		}
+		if s.MetadataPrefix != "dim" && s.MetadataPrefix != "oai_dc" {
+			return fmt.Errorf("source %q: metadata_prefix must be dim or oai_dc, the mapped formats", s.ID)
 		}
 		if _, err := cron.ParseStandard(s.Schedule); err != nil {
 			return fmt.Errorf("source %q: schedule: %w", s.ID, err)
