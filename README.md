@@ -64,7 +64,7 @@ sudo dssr update
 ```
 
 It installs the latest release if that release is newer than the installed version.
-To install a specific release, for example a pre-release, set `DSSR_VERSION`:
+To install a specific newer release, for example a pre-release, set `DSSR_VERSION`:
 
 ```bash
 sudo DSSR_VERSION=0.1.0 dssr update
