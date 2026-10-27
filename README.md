@@ -7,6 +7,9 @@ dssr maps two metadata formats: `oai_dc`, which every OAI-PMH data provider supp
 `oai_dc` is the default.
 `dim` gives more detail for DSpace, for example the role of each contributor.
 
+> [!WARNING]
+> dssr is experimental. Do not use it in production. The API, configuration, and index format may change without notice.
+
 ## Install
 
 On a Linux server with systemd, run this command.
