@@ -12,11 +12,10 @@ dssr maps two metadata formats: `oai_dc`, which every OAI-PMH data provider supp
 
 ## Install
 
-On a Linux server with systemd, run this command.
-Replace the URL with the OAI-PMH base URL of your source:
+On a Linux server with systemd, run this command:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/kuueri/dssr/main/install.sh | sudo DSSR_OAI_URL=https://example.org/oai/request bash
+curl -fsSL https://raw.githubusercontent.com/kuueri/dssr/main/install.sh | sudo bash
 ```
 
 The script does these steps:
@@ -24,8 +23,11 @@ The script does these steps:
 1. It downloads the latest release for `amd64` or `arm64` and checks the SHA-256 checksum.
 2. It installs `/usr/local/bin/dssr` and the systemd service `dssr`.
 3. It makes the system user `dssr` and adds the user that runs `sudo` to the group `dssr`.
-4. If `/etc/dssr/dssr.yaml` does not exist, it writes the file with the source `repo` from `DSSR_OAI_URL` and a new client token.
-5. It starts dssr. The first harvest reads all records of each source.
+4. If `/etc/dssr/dssr.yaml` does not exist, it writes the file with a new client token and an example source in comments.
+5. It starts dssr. dssr harvests nothing until the file has a source.
+
+After the install, add each source under `sources` in `/etc/dssr/dssr.yaml` and restart dssr, as [Configure](#configure) describes.
+The first harvest of a source reads all its records.
 
 At the end, the script shows the client token one time.
 dssr keeps only the hash of the token, so store the token immediately.
