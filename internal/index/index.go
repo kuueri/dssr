@@ -52,7 +52,7 @@ func newMapping() (*mapping.IndexMappingImpl, error) {
 	if err := m.AddCustomAnalyzer(analyzer, map[string]any{
 		"type":          custom.Name,
 		"tokenizer":     unicode.Name,
-		"token_filters": []string{"nfkc", lowercase.Name, en.StopName, id.StopName},
+		"token_filters": []string{"nfkc", lowercase.Name, en.StopName, id.StopName, stemmer},
 	}); err != nil {
 		return nil, err
 	}
