@@ -3,7 +3,9 @@
 dssr harvests metadata from any OAI-PMH data provider, keeps its own search index, and serves search over an HTTP API.
 Client services search dssr, so they do not need access to the source systems.
 dssr only reads the OAI-PMH endpoint of each source.
-At this time, dssr maps the `dim` metadata format, which DSpace supplies.
+dssr maps two metadata formats: `oai_dc`, which every OAI-PMH data provider supplies, and `dim`, which DSpace supplies.
+`oai_dc` is the default.
+`dim` gives more detail for DSpace, for example the role of each contributor.
 
 ## Install
 
@@ -35,14 +37,14 @@ Put a TLS reverse proxy in front of dssr before other hosts use the API.
 Edit `/etc/dssr/dssr.yaml`, then restart dssr with `sudo systemctl restart dssr`.
 dssr does not start if the file has an unknown key or an incorrect value.
 
-| Key            | Value                                                                                                    |
-| -------------- | -------------------------------------------------------------------------------------------------------- |
-| `listen`       | TCP address of the HTTP API                                                                              |
-| `index_path`   | Directory of the index                                                                                   |
-| `admin_socket` | Path of the unix socket for the `dssr` subcommands                                                       |
-| `timezone`     | Time zone for the schedules                                                                              |
-| `clients`      | `name` and `token_sha256` of each client service                                                         |
-| `sources`      | `id`, `name`, `oai_url`, `metadata_prefix` (only `dim`), and `schedule` (cron expression) of each source |
+| Key            | Value                                                                                                                       |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `listen`       | TCP address of the HTTP API                                                                                                 |
+| `index_path`   | Directory of the index                                                                                                      |
+| `admin_socket` | Path of the unix socket for the `dssr` subcommands                                                                          |
+| `timezone`     | Time zone for the schedules                                                                                                 |
+| `clients`      | `name` and `token_sha256` of each client service                                                                            |
+| `sources`      | `id`, `name`, `oai_url`, `metadata_prefix` (`oai_dc` by default, or `dim`), and `schedule` (cron expression) of each source |
 
 To add a client service, make a token and its hash:
 
@@ -62,6 +64,12 @@ sudo dssr update
 ```
 
 It installs the latest release if that release is newer than the installed version.
+To install a specific release, for example a pre-release, set `DSSR_VERSION`:
+
+```bash
+sudo DSSR_VERSION=0.1.0 dssr update
+```
+
 dssr runs `install.sh` from the tag of the release, not from `main`, so the script and the release files have the same version.
 The update keeps `/etc/dssr/dssr.yaml` and restarts dssr.
 
@@ -118,7 +126,9 @@ curl -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:8080/v1/search?q=wisata
 - Data in dssr is only as fresh as the OAI-PMH data of the source. Set `schedule` to run after the source refreshes its OAI-PMH data.
 - An incremental harvest cannot find records that a source deleted without a deletion record, for example items that DSpace expunged. Run `dssr harvest --full` to delete them from the index.
 - A full harvest does not delete old records if it sees fewer than 90% of the indexed records. This guard keeps the index if the source fails.
-- `dssr status` shows the `dim` fields that dssr dropped. Use this list to extend the field mapping in `internal/record`.
+- For a source whose OAI-PMH datestamp does not change when a record changes, for example SLiMS, an incremental harvest finds only new records. Run `dssr harvest --full` to get the changes.
+- After a change to `metadata_prefix`, run `dssr harvest --full --source ID`, because the index keeps the records of the old format until each record is harvested again.
+- `dssr status` shows the fields that dssr dropped. Use this list to extend the field mapping in `internal/record`.
 - The index keeps the analyzer and the index mapping from the time dssr made it. After a change to `internal/index`, stop dssr, delete the index directory, and start dssr.
 
 ## Build from source
