@@ -32,11 +32,12 @@ dssr is pull-only: it reaches each source only through the source's OAI-PMH endp
 ## Architecture
 
 `dssr serve` is the single owner of the Bleve index, because bbolt holds an exclusive file lock.
-Every subcommand except `update` and `uninstall` is an HTTP client of the admin unix socket (`call` in `cmd/dssr/main.go`), so it needs a running `serve`.
+Every subcommand except `update`, `reindex`, and `uninstall` is an HTTP client of the admin unix socket (`call` in `cmd/dssr/main.go`), so it needs a running `serve`.
 Members of the group `dssr` reach the socket without `sudo`, because `listenUnix` sets mode 0660 and the unit sets `RuntimeDirectoryMode=0750`.
 `dssr update` runs `install.sh` from the tag of the latest release, or of `DSSR_VERSION` when the operator sets it, with `DSSR_VERSION` set, never from `main`, so the installer matches the release files.
+`dssr reindex` stops the service, deletes the index directory, and starts the service, whose startup harvest then reads every record because the cursor went with the index.
 `dssr uninstall` stops the service and removes the installation from the host.
-Both run as root and do not contact `serve`.
+All three run as root and do not contact `serve`.
 
 A harvest flows through `harvest` (schedule), `oai` (`ListRecords` paging), `record` (`dim` or `oai_dc` whitelist mapping), and `index` (Bleve documents).
 Each document stores the full record as JSON in the unindexed field `record`, and search results and record lookups return that JSON.
@@ -45,7 +46,7 @@ Each document stores the full record as JSON in the unindexed field `record`, an
 
 - The incremental `from` is the cursor minus 24 hours, because a DSpace datestamp is the change time, not the time the record reached the OAI core. The cursor advances only after a successful run.
 - A full harvest is mark-and-sweep by generation. The sweep is skipped when the run fails or sees fewer than 90% of the indexed records, because DSpace answers `noRecordsMatch` when its OAI core is empty or Solr fails.
-- Bleve persists its index mapping at creation, so a change to `newMapping` or the analyzer requires deleting the index directory, while a change to the `record` mapping requires `dssr harvest --full`.
+- Bleve persists its index mapping at creation, so a change to `newMapping` or the analyzer requires `sudo dssr reindex`, while a change to the `record` mapping requires `dssr harvest --full`.
 - The whitelist keeps only the `dc` schema and drops `dc.description.provenance` (staff names and e-mail addresses) and every non-`dc` schema (may hold student numbers). `oai_dc` (the default prefix) has no qualifiers, so the whitelist cannot drop provenance from it and relies on the source crosswalk to leave it out, as the stock DSpace 6.3 `oai_dc.xsl` does. Every unqualified `dc:description` maps to `abstract`, because only `abstract` is searched. `dssr status` counts dropped fields, and that count is how the whitelist grows.
 - Results carry the full record because clients pass them to AI agents as context.
 - Search weights, fuzzy settings, and stemming change only on evidence from `dssr eval`.

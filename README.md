@@ -76,6 +76,17 @@ sudo DSSR_VERSION=0.1.0 dssr update
 dssr runs `install.sh` from the tag of the release, not from `main`, so the script and the release files have the same version.
 The update keeps `/etc/dssr/dssr.yaml` and restarts dssr.
 
+## Reindex
+
+When the release notes say that a release changes the index, run this command as root after the update:
+
+```bash
+sudo dssr reindex
+```
+
+It stops dssr, deletes the index at `index_path`, and starts dssr, which then harvests every record of each source again.
+Search results stay incomplete until each harvest ends, so run it only when every source answers OAI-PMH.
+
 ## Uninstall
 
 Run this command as root:
@@ -134,7 +145,7 @@ curl -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:8080/v1/search?q=wisata
 - For a source whose OAI-PMH datestamp does not change when a record changes, for example SLiMS, an incremental harvest finds only new records. Run `dssr harvest --full` to get the changes.
 - After a change to `metadata_prefix`, run `dssr harvest --full --source ID`, because the index keeps the records of the old format until each record is harvested again.
 - `dssr status` shows the fields that dssr dropped. Use this list to extend the field mapping in `internal/record`.
-- The index keeps the analyzer and the index mapping from the time dssr made it. After a change to `internal/index`, stop dssr, delete the index directory, and start dssr.
+- The index keeps the analyzer and the index mapping from the time dssr made it. After a change to `internal/index`, run `sudo dssr reindex`.
 
 ## Build from source
 
