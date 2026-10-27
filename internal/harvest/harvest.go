@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -103,11 +104,7 @@ func (h *Harvester) Start(id string, full bool) error {
 	if err := h.begin(id); err != nil {
 		return err
 	}
-	h.wg.Add(1)
-	go func() {
-		defer h.wg.Done()
-		h.run(id, full)
-	}()
+	h.wg.Go(func() { h.run(id, full) })
 	return nil
 }
 
@@ -279,10 +276,7 @@ func (h *Harvester) Status() ([]SourceStatus, error) {
 		}
 		h.mu.Lock()
 		st := h.state[s.ID]
-		ss := SourceStatus{ID: s.ID, Name: s.Name, Docs: docs, Cursor: cur, Running: st.running, Last: st.last, Dropped: map[string]int{}}
-		for k, n := range st.dropped {
-			ss.Dropped[k] = n
-		}
+		ss := SourceStatus{ID: s.ID, Name: s.Name, Docs: docs, Cursor: cur, Running: st.running, Last: st.last, Dropped: maps.Clone(st.dropped)}
 		if h.cron != nil {
 			if next := h.cron.Entry(st.entry).Next; !next.IsZero() {
 				ss.Next = &next

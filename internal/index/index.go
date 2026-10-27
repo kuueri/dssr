@@ -25,7 +25,7 @@ type Index struct {
 }
 
 func Open(path string) (*Index, error) {
-	b, err := bleve.OpenUsing(path, map[string]interface{}{"bolt_timeout": "1s"})
+	b, err := bleve.OpenUsing(path, map[string]any{"bolt_timeout": "1s"})
 	if errors.Is(err, bleve.ErrorIndexPathDoesNotExist) {
 		var m *mapping.IndexMappingImpl
 		if m, err = newMapping(); err == nil {
@@ -43,13 +43,13 @@ func (x *Index) Close() error { return x.b.Close() }
 func newMapping() (*mapping.IndexMappingImpl, error) {
 	m := bleve.NewIndexMapping()
 	m.ScoringModel = bleveindex.BM25Scoring
-	if err := m.AddCustomTokenFilter("nfkc", map[string]interface{}{
+	if err := m.AddCustomTokenFilter("nfkc", map[string]any{
 		"type": unicodenorm.Name,
 		"form": unicodenorm.NFKC,
 	}); err != nil {
 		return nil, err
 	}
-	if err := m.AddCustomAnalyzer(analyzer, map[string]interface{}{
+	if err := m.AddCustomAnalyzer(analyzer, map[string]any{
 		"type":          custom.Name,
 		"tokenizer":     unicode.Name,
 		"token_filters": []string{"nfkc", lowercase.Name, en.StopName, id.StopName},
@@ -97,12 +97,12 @@ func newMapping() (*mapping.IndexMappingImpl, error) {
 	return m, nil
 }
 
-func toDoc(r record.Record, gen string) (map[string]interface{}, error) {
+func toDoc(r record.Record, gen string) (map[string]any, error) {
 	js, err := json.Marshal(r)
 	if err != nil {
 		return nil, err
 	}
-	d := map[string]interface{}{"source": r.Source, "gen": gen, "record": string(js)}
+	d := map[string]any{"source": r.Source, "gen": gen, "record": string(js)}
 	set := func(k string, v []string) {
 		if len(v) > 0 {
 			d[k] = v
