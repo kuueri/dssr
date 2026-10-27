@@ -46,6 +46,7 @@ const usage = `Usage:
   dssr --version
 
 FILE defaults to /etc/dssr/dssr.yaml.
+DSSR_VERSION=X.Y.Z makes update install that release instead of the latest one.
 `
 
 func main() {
@@ -481,13 +482,19 @@ func update(args []string) error {
 		return errors.New("run as root: sudo dssr update")
 	}
 
-	tag, err := latestRelease(latestReleaseURL)
-	if err != nil {
-		return err
-	}
-	if !newer(tag, buildVersion) {
-		fmt.Printf("dssr %s is up to date, the latest release is %s\n", version(), tag)
-		return nil
+	tag := os.Getenv("DSSR_VERSION")
+	if tag == "" {
+		latest, err := latestRelease(latestReleaseURL)
+		if err != nil {
+			return fmt.Errorf("%w; to install a pre-release, run: sudo DSSR_VERSION=<version> dssr update", err)
+		}
+		if !newer(latest, buildVersion) {
+			fmt.Printf("dssr %s is up to date, the latest release is %s\n", version(), latest)
+			return nil
+		}
+		tag = latest
+	} else if !versionRE.MatchString(tag) {
+		return fmt.Errorf("DSSR_VERSION %q is not a version like 0.1.0", tag)
 	}
 
 	script, err := fetch(fmt.Sprintf(installScriptURL, tag))
