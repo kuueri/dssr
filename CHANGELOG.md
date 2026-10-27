@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.4] - 2026-10-27
+
+### Added
+
+- Harvest the `oai_dc` metadata format alongside `dim`. `oai_dc` is the default for a source that omits `metadata_prefix`, and `dim` remains available for the DSpace-specific mapping.
+- `dssr update` accepts `DSSR_VERSION`, so it can install a specific release, including a pre-release, instead of the latest release.
+
+### Changed
+
+- New installs and new sources use `metadata_prefix: oai_dc`; existing configs keep their prefix. Run `dssr harvest --full --source ID` after changing the prefix on an existing source.
+
 ## [0.0.3] - 2026-10-27
 
 ### Added
@@ -32,6 +43,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `install.sh` to install or upgrade dssr as a systemd service from a GitHub release.
 - Release archives for linux/amd64 and linux/arm64 with SHA-256 checksums and the licenses of all dependencies.
 
+[0.0.4]: https://github.com/kuueri/dssr/compare/0.0.3...0.0.4
 [0.0.3]: https://github.com/kuueri/dssr/compare/0.0.2...0.0.3
 [0.0.2]: https://github.com/kuueri/dssr/compare/0.0.1...0.0.2
 [0.0.1]: https://github.com/kuueri/dssr/releases/tag/0.0.1
