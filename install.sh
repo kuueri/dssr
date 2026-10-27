@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install or upgrade dssr as a systemd service from a GitHub release.
 #
-#   curl -fsSL https://raw.githubusercontent.com/kuueri/dssr/main/install.sh | sudo bash
+#   curl -fsSL https://kuueri.com/dssr/install.sh | sudo bash
 #
 # Environment:
 #   DSSR_VERSION  release tag to install, for example 0.1.0 (default: the latest release)
@@ -61,7 +61,7 @@ EOF
 }
 
 main() {
-	[[ ${EUID} -eq 0 ]] || die "run as root: curl -fsSL https://raw.githubusercontent.com/${REPO}/main/install.sh | sudo bash"
+	[[ ${EUID} -eq 0 ]] || die "run as root: curl -fsSL https://kuueri.com/dssr/install.sh | sudo bash"
 	local cmd
 	for cmd in curl awk tar sha256sum od install useradd usermod systemctl journalctl; do
 		command -v "${cmd}" >/dev/null || die "${cmd} is required"

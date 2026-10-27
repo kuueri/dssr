@@ -15,7 +15,7 @@ dssr maps two metadata formats: `oai_dc`, which every OAI-PMH data provider supp
 On a Linux server with systemd, run this command:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/kuueri/dssr/main/install.sh | sudo bash
+curl -fsSL https://kuueri.com/dssr/install.sh | sudo bash
 ```
 
 The script does these steps:
