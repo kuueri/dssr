@@ -33,6 +33,7 @@ dssr is pull-only: it reaches each source only through the source's OAI-PMH endp
 
 `dssr serve` is the single owner of the Bleve index, because bbolt holds an exclusive file lock.
 Every subcommand except `update` and `uninstall` is an HTTP client of the admin unix socket (`call` in `cmd/dssr/main.go`), so it needs a running `serve`.
+Members of the group `dssr` reach the socket without `sudo`, because `listenUnix` sets mode 0660 and the unit sets `RuntimeDirectoryMode=0750`.
 `dssr update` runs `install.sh` from the tag of the latest release with `DSSR_VERSION` set, never from `main`, so the installer matches the release files.
 `dssr uninstall` stops the service and removes the installation from the host.
 Both run as root and do not contact `serve`.

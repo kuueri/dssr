@@ -18,7 +18,7 @@ The script does these steps:
 
 1. It downloads the latest release for `amd64` or `arm64` and checks the SHA-256 checksum.
 2. It installs `/usr/local/bin/dssr` and the systemd service `dssr`.
-3. It makes the system user `dssr`.
+3. It makes the system user `dssr` and adds the user that runs `sudo` to the group `dssr`.
 4. If `/etc/dssr/dssr.yaml` does not exist, it writes the file with the source `repo` from `DSSR_OAI_URL` and a new client token.
 5. It starts dssr. The first harvest reads all records of each source.
 
@@ -80,13 +80,16 @@ The system journal keeps the old `dssr` entries, because journald has no per-uni
 
 ## Use
 
-On the server, run the `dssr` subcommands as the `dssr` user:
+On the server, run the `dssr` subcommands as root or as a member of the group `dssr`.
+The install script adds the user that runs `sudo` to the group, so log in again after the first install.
+To add another user, run `sudo usermod -aG dssr <user>`.
+The subcommands read `/etc/dssr/dssr.yaml`, and `--config` selects a different file.
 
 ```bash
-sudo -u dssr dssr status --config /etc/dssr/dssr.yaml
-sudo -u dssr dssr search "wisata ziarah" --year 2020-2024 --config /etc/dssr/dssr.yaml
-sudo -u dssr dssr get repo:123456789/56 --config /etc/dssr/dssr.yaml
-sudo -u dssr dssr harvest --full --config /etc/dssr/dssr.yaml
+dssr status
+dssr search "wisata ziarah" --year 2020-2024
+dssr get repo:123456789/56
+dssr harvest --full
 ```
 
 | Command                               | Action                                                                     |

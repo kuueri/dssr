@@ -1,4 +1,4 @@
-# Copy to dssr.yaml. Paths here suit a local run; production uses /var/lib/dssr/index and /run/dssr/admin.sock.
+# Copy to dssr.yaml and pass --config dssr.yaml to each subcommand. Paths here suit a local run; production uses /var/lib/dssr/index and /run/dssr/admin.sock.
 listen: 127.0.0.1:8080
 index_path: ./data/index
 admin_socket: ./dssr.sock
