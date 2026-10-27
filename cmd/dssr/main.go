@@ -35,19 +35,80 @@ import (
 )
 
 const usage = `Usage:
-  dssr serve   [--config FILE]
-  dssr harvest [--config FILE] [--source ID] [--full]
-  dssr search  [--config FILE] <query> [--type T]... [--year 2020-2024] [--collection C]... [--language L]... [--sort newest] [--page 1] [--limit 10] [--json]
-  dssr get     [--config FILE] <id> [--json]
-  dssr status  [--config FILE] [--json]
-  dssr eval    [--config FILE] <file>
+  dssr serve   [options]
+  dssr harvest [options]
+  dssr search  [options] <query>
+  dssr get     [options] <id>
+  dssr status  [options]
+  dssr eval    [options] <file>
   dssr update
   dssr uninstall
   dssr --version
 
-FILE defaults to /etc/dssr/dssr.yaml.
-DSSR_VERSION=X.Y.Z makes update install that release instead of the latest one, if it is newer.
+Run dssr <command> --help to see the options of a command.
 `
+
+var commandHelp = map[string]string{
+	"serve": `Usage: dssr serve [options]
+
+Start the HTTP API, the admin socket, and the harvest schedule.
+Only one dssr serve can use the index at one time.
+`,
+	"harvest": `Usage: dssr harvest [options]
+
+Start a harvest now. dssr serve does the harvest in the background.
+Run dssr status to see the result.
+`,
+	"search": `Usage: dssr search [options] <query>
+
+Search the index with the same logic as the HTTP API.
+Every word in <query> must match.
+Put a phrase in double quotes.
+In a shell, put single quotes around the double quotes.
+If you give a filter option more than one time, a record must match one of its values.
+If you give more than one filter option, a record must match all of them.
+To see the values for a filter, run dssr search <query> --json and read "facets".
+The facet isPartOf shows the values for --collection.
+
+Examples:
+  dssr search wisata ziarah
+  dssr search '"wisata ziarah"' --year 2020-2024 --sort newest
+  dssr search ekonomi --type Thesis --type Article --language id
+`,
+	"get": `Usage: dssr get [options] <id>
+
+Show one record as JSON.
+<id> is the source ID and the record handle with a colon between them, for example repo:123456789/56.
+`,
+	"status": `Usage: dssr status [options]
+
+Show the record count, cursor, next harvest, last harvest, and dropped fields of each source.
+`,
+	"eval": `Usage: dssr eval [options] <file>
+
+Measure search relevance with a list of test queries.
+<file> is a YAML list.
+Each item has q, an optional filter, and expect, the IDs of the records that the query must find.
+dssr runs each query and looks for an expected record in the first 10 results.
+The command fails when fewer than 80% of the queries find an expected record.
+`,
+	"update": `Usage: sudo dssr update
+
+Install a newer release.
+Without DSSR_VERSION, dssr installs the latest release.
+With DSSR_VERSION, dssr installs that release, for example a pre-release:
+
+  sudo DSSR_VERSION=0.1.0 dssr update
+
+dssr does nothing if the release is not newer than the installed version.
+`,
+	"uninstall": `Usage: sudo dssr uninstall
+
+Stop dssr and remove it from this host.
+The command removes the service, the binary, the configuration, the index, and the dssr user and group.
+You cannot undo this command.
+`,
+}
 
 func main() {
 	if len(os.Args) < 2 {
@@ -124,8 +185,11 @@ func parse(fs *flag.FlagSet, args []string) []string {
 
 func newFlags(name string) (*flag.FlagSet, *string) {
 	fs := flag.NewFlagSet(name, flag.ExitOnError)
-	fs.Usage = func() { fmt.Fprint(os.Stderr, usage) }
-	return fs, fs.String("config", configFile, "configuration file")
+	fs.Usage = func() {
+		fmt.Fprint(fs.Output(), commandHelp[name], "\nOptions:\n")
+		fs.PrintDefaults()
+	}
+	return fs, fs.String("config", configFile, "Read the configuration from this `file`.")
 }
 
 func serve(args []string) error {
@@ -245,8 +309,8 @@ func call(cfgPath, method, path string) ([]byte, error) {
 
 func harvestCmd(args []string) error {
 	fs, cfgPath := newFlags("harvest")
-	source := fs.String("source", "", "source ID, default all sources")
-	full := fs.Bool("full", false, "harvest every record and remove the ones that are gone")
+	source := fs.String("source", "", "Harvest only the source with this `ID`.\nWithout this option, dssr harvests all sources.")
+	full := fs.Bool("full", false, "Read all records of the source, then remove the records that the source no longer lists.\nWithout this option, dssr reads only the records that changed after the last harvest.\ndssr removes no records if the harvest sees fewer than 90% of the indexed records.")
 	parse(fs, args)
 	v := url.Values{}
 	if *source != "" {
@@ -277,14 +341,14 @@ func harvestCmd(args []string) error {
 func search(args []string) error {
 	fs, cfgPath := newFlags("search")
 	var types, collections, languages multi
-	fs.Var(&types, "type", "type filter, repeatable")
-	fs.Var(&collections, "collection", "collection filter, repeatable")
-	fs.Var(&languages, "language", "language filter, repeatable")
-	year := fs.String("year", "", "year or range, for example 2020-2024")
-	sort := fs.String("sort", "relevance", "relevance or newest")
-	page := fs.String("page", "1", "page number")
-	limit := fs.String("limit", "10", "results per page, up to 50")
-	asJSON := fs.Bool("json", false, "print JSON")
+	fs.Var(&types, "type", "Show only records of this `type`, for example Thesis.\nUse the exact value, with the same uppercase and lowercase letters.")
+	fs.Var(&collections, "collection", "Show only records in this `collection` or community.\nUse the exact name.")
+	fs.Var(&languages, "language", "Show only records in this `language`, for example id or en.\nUse the exact value.")
+	year := fs.String("year", "", "Show only records issued in this `year` or range of years, for example 2020 or 2020-2024.\nThe range includes the first and the last year.")
+	sort := fs.String("sort", "relevance", "Sort the results in this `order`: relevance or newest.\nWith newest, the latest issue date comes first.")
+	page := fs.String("page", "1", "Show this `page` of results. The first page is 1.\ndssr shows only the first 1000 results.")
+	limit := fs.String("limit", "10", "Show this `number` of results on each page, from 1 to 50.")
+	asJSON := fs.Bool("json", false, "Print the full result as JSON, with the facets.")
 	q := strings.Join(parse(fs, args), " ")
 
 	v := url.Values{"q": {q}, "type": types, "collection": collections, "language": languages, "sort": {*sort}, "page": {*page}, "limit": {*limit}}
@@ -319,7 +383,7 @@ func search(args []string) error {
 
 func get(args []string) error {
 	fs, cfgPath := newFlags("get")
-	asJSON := fs.Bool("json", false, "print compact JSON")
+	asJSON := fs.Bool("json", false, "Print the record as compact JSON. Without this option, dssr indents the JSON.")
 	pos := parse(fs, args)
 	if len(pos) != 1 {
 		return errors.New("get needs exactly one record id, for example repo:123456789/56")
@@ -346,7 +410,7 @@ func get(args []string) error {
 
 func status(args []string) error {
 	fs, cfgPath := newFlags("status")
-	asJSON := fs.Bool("json", false, "print JSON")
+	asJSON := fs.Bool("json", false, "Print the status as JSON.")
 	parse(fs, args)
 	body, err := call(*cfgPath, http.MethodGet, "/status")
 	if err != nil {
@@ -473,7 +537,7 @@ var versionRE = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
 
 func update(args []string) error {
 	flags := flag.NewFlagSet("update", flag.ExitOnError)
-	flags.Usage = func() { fmt.Fprint(os.Stderr, usage) }
+	flags.Usage = func() { fmt.Fprint(flags.Output(), commandHelp["update"]) }
 	flags.Parse(args)
 	if flags.NArg() != 0 {
 		return errors.New("update takes no arguments")
@@ -568,7 +632,7 @@ const (
 
 func uninstall(args []string) error {
 	flags := flag.NewFlagSet("uninstall", flag.ExitOnError)
-	flags.Usage = func() { fmt.Fprint(os.Stderr, usage) }
+	flags.Usage = func() { fmt.Fprint(flags.Output(), commandHelp["uninstall"]) }
 	flags.Parse(args)
 	if flags.NArg() != 0 {
 		return errors.New("uninstall takes no arguments")
