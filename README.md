@@ -7,6 +7,8 @@ dssr maps two metadata formats: `oai_dc`, which every OAI-PMH data provider supp
 `oai_dc` is the default.
 `dim` gives more detail for DSpace, for example the role of each contributor.
 
+![dssr serve harvests records from each data provider over OAI-PMH, maps them through a dc field whitelist into its Bleve index, and serves client services over the HTTP API and the dssr CLI over the admin socket](docs/architecture.svg)
+
 > [!WARNING]
 > dssr is experimental. Do not use it in production. The API, configuration, and index format may change without notice.
 

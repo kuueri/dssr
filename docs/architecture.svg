@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 880 424" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="architecture-title architecture-desc" id="architecture-root">
+  <title id="architecture-title">How dssr works</title>
+  <desc id="architecture-desc">dssr serve pulls records from OAI-PMH data providers on a cron schedule, maps them through a dc field whitelist into its Bleve index, and answers client services over the HTTP API and the dssr CLI over the admin socket.</desc>
+  <defs>
+    <style>
+      #architecture-root .name { font-family: "Geist", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 12px; font-weight: 600; fill: #eaf2ff; }
+      #architecture-root .sub { font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 9px; fill: #a9bfe0; }
+      #architecture-root .tag { font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 7px; letter-spacing: 0.08em; fill: #8aa4cc; }
+      #architecture-root .label { font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 8px; letter-spacing: 0.06em; fill: #a9bfe0; }
+      #architecture-root .zone { font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 7px; letter-spacing: 0.14em; fill: #8aa4cc; }
+    </style>
+    <marker id="architecture-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#a9bfe0"/></marker>
+  </defs>
+
+  <rect width="880" height="424" rx="8" fill="#0a224d"/>
+
+  <rect x="216" y="40" width="624" height="344" rx="8" fill="#eaf2ff" fill-opacity="0.02" stroke="#eaf2ff" stroke-opacity="0.16" stroke-width="0.8"/>
+  <rect x="232" y="44" width="64" height="12" rx="2" fill="#0a224d"/>
+  <text class="zone" x="264" y="53" text-anchor="middle">DSSR SERVE</text>
+
+  <line x1="176" y1="104" x2="256" y2="104" stroke="#a9bfe0" stroke-width="1.2" marker-end="url(#architecture-arrow)"/>
+  <line x1="408" y1="104" x2="456" y2="104" stroke="#a9bfe0" stroke-width="1.2" marker-end="url(#architecture-arrow)"/>
+  <path d="M 608,104 H 732 Q 740,104 740,112 V 184" fill="none" stroke="#a9bfe0" stroke-width="1.2" marker-end="url(#architecture-arrow)"/>
+  <line x1="176" y1="216" x2="256" y2="216" stroke="#a9bfe0" stroke-width="1.2" marker-end="url(#architecture-arrow)"/>
+  <line x1="332" y1="184" x2="332" y2="136" stroke="#a9bfe0" stroke-width="1.2" marker-end="url(#architecture-arrow)"/>
+  <line x1="408" y1="216" x2="664" y2="216" stroke="#a9bfe0" stroke-width="1.2" marker-end="url(#architecture-arrow)"/>
+  <line x1="176" y1="328" x2="256" y2="328" stroke="#a9bfe0" stroke-width="1.2" marker-end="url(#architecture-arrow)"/>
+  <path d="M 408,328 H 732 Q 740,328 740,320 V 248" fill="none" stroke="#a9bfe0" stroke-width="1.2" marker-end="url(#architecture-arrow)"/>
+
+  <rect x="192" y="84" width="48" height="12" rx="2" fill="#0a224d"/>
+  <text class="label" x="216" y="93" text-anchor="middle">OAI-PMH</text>
+  <rect x="638" y="84" width="64" height="12" rx="2" fill="#0a224d"/>
+  <text class="label" x="670" y="93" text-anchor="middle">DC RECORDS</text>
+  <rect x="340" y="154" width="68" height="12" rx="2" fill="#0a224d"/>
+  <text class="label" x="374" y="163" text-anchor="middle">HARVEST NOW</text>
+  <rect x="520" y="196" width="32" height="12" rx="2" fill="#0a224d"/>
+  <text class="label" x="536" y="205" text-anchor="middle">READ</text>
+  <rect x="534" y="308" width="72" height="12" rx="2" fill="#0a224d"/>
+  <text class="label" x="570" y="317" text-anchor="middle">SEARCH · GET</text>
+
+  <rect x="40" y="72" width="136" height="64" rx="6" fill="#0a224d"/>
+  <rect x="40" y="72" width="136" height="64" rx="6" fill="#eaf2ff" fill-opacity="0.03" stroke="#eaf2ff" stroke-opacity="0.30" stroke-width="1"/>
+  <rect x="48" y="80" width="36" height="12" rx="2" fill="none" stroke="#eaf2ff" stroke-opacity="0.22" stroke-width="0.8"/>
+  <text class="tag" x="66" y="89" text-anchor="middle">SOURCE</text>
+  <text class="name" x="108" y="108" text-anchor="middle">Data provider</text>
+  <text class="sub" x="108" y="124" text-anchor="middle">DSpace · SLiMS</text>
+
+  <rect x="40" y="184" width="136" height="64" rx="6" fill="#0a224d"/>
+  <rect x="40" y="184" width="136" height="64" rx="6" fill="#a9bfe0" fill-opacity="0.10" stroke="#8aa4cc" stroke-width="1"/>
+  <rect x="48" y="192" width="48" height="12" rx="2" fill="none" stroke="#8aa4cc" stroke-opacity="0.50" stroke-width="0.8"/>
+  <text class="tag" x="72" y="201" text-anchor="middle">OPERATOR</text>
+  <text class="name" x="108" y="220" text-anchor="middle">dssr CLI</text>
+  <text class="sub" x="108" y="236" text-anchor="middle">status · search</text>
+
+  <rect x="40" y="296" width="136" height="64" rx="6" fill="#0a224d"/>
+  <rect x="40" y="296" width="136" height="64" rx="6" fill="#a9bfe0" fill-opacity="0.10" stroke="#8aa4cc" stroke-width="1"/>
+  <rect x="48" y="304" width="36" height="12" rx="2" fill="none" stroke="#8aa4cc" stroke-opacity="0.50" stroke-width="0.8"/>
+  <text class="tag" x="66" y="313" text-anchor="middle">CLIENT</text>
+  <text class="name" x="108" y="332" text-anchor="middle">Client services</text>
+  <text class="sub" x="108" y="348" text-anchor="middle">Bearer token</text>
+
+  <rect x="256" y="72" width="152" height="64" rx="6" fill="#0a224d"/>
+  <rect x="256" y="72" width="152" height="64" rx="6" fill="#112c5e" stroke="#eaf2ff" stroke-width="1"/>
+  <rect x="264" y="80" width="44" height="12" rx="2" fill="none" stroke="#eaf2ff" stroke-opacity="0.40" stroke-width="0.8"/>
+  <text class="tag" x="286" y="89" text-anchor="middle">HARVEST</text>
+  <text class="name" x="332" y="108" text-anchor="middle">Harvester</text>
+  <text class="sub" x="332" y="124" text-anchor="middle">cron schedule</text>
+
+  <rect x="456" y="72" width="152" height="64" rx="6" fill="#0a224d"/>
+  <rect x="456" y="72" width="152" height="64" rx="6" fill="#112c5e" stroke="#eaf2ff" stroke-width="1"/>
+  <rect x="464" y="80" width="36" height="12" rx="2" fill="none" stroke="#eaf2ff" stroke-opacity="0.40" stroke-width="0.8"/>
+  <text class="tag" x="482" y="89" text-anchor="middle">RECORD</text>
+  <text class="name" x="532" y="108" text-anchor="middle">Field mapping</text>
+  <text class="sub" x="532" y="124" text-anchor="middle">dc whitelist</text>
+
+  <rect x="256" y="184" width="152" height="64" rx="6" fill="#0a224d"/>
+  <rect x="256" y="184" width="152" height="64" rx="6" fill="#112c5e" stroke="#eaf2ff" stroke-width="1"/>
+  <rect x="264" y="192" width="36" height="12" rx="2" fill="none" stroke="#eaf2ff" stroke-opacity="0.40" stroke-width="0.8"/>
+  <text class="tag" x="282" y="201" text-anchor="middle">SERVER</text>
+  <text class="name" x="332" y="220" text-anchor="middle">Admin socket</text>
+  <text class="sub" x="332" y="236" text-anchor="middle">unix · group dssr</text>
+
+  <rect x="256" y="296" width="152" height="64" rx="6" fill="#0a224d"/>
+  <rect x="256" y="296" width="152" height="64" rx="6" fill="#112c5e" stroke="#eaf2ff" stroke-width="1"/>
+  <rect x="264" y="304" width="36" height="12" rx="2" fill="none" stroke="#eaf2ff" stroke-opacity="0.40" stroke-width="0.8"/>
+  <text class="tag" x="282" y="313" text-anchor="middle">SERVER</text>
+  <text class="name" x="332" y="332" text-anchor="middle">HTTP API</text>
+  <text class="sub" x="332" y="348" text-anchor="middle">127.0.0.1:8080</text>
+
+  <rect x="664" y="184" width="152" height="64" rx="6" fill="#0a224d"/>
+  <rect x="664" y="184" width="152" height="64" rx="6" fill="#5ab0ff" fill-opacity="0.10" stroke="#5ab0ff" stroke-width="1.2"/>
+  <rect x="672" y="192" width="32" height="12" rx="2" fill="none" stroke="#5ab0ff" stroke-opacity="0.50" stroke-width="0.8"/>
+  <text class="tag" x="688" y="201" text-anchor="middle" style="fill: #5ab0ff">INDEX</text>
+  <text class="name" x="740" y="220" text-anchor="middle">Bleve index</text>
+  <text class="sub" x="740" y="236" text-anchor="middle">full record as JSON</text>
+</svg>
