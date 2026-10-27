@@ -48,15 +48,15 @@ admin_socket: /run/dssr/admin.sock
 timezone: Asia/Jakarta
 
 clients:
-    - name: default
-      token_sha256: ${hash}
+  - name: default
+    token_sha256: ${hash}
 
 sources:
-    - id: repo
-      name: "${host}"
-      oai_url: "${url}"
-      metadata_prefix: dim
-      schedule: "0 3 * * 1"
+  - id: repo
+    name: "${host}"
+    oai_url: "${url}"
+    metadata_prefix: dim
+    schedule: "0 3 * * 1"
 EOF
 	install -m 0640 -o root -g dssr "${tmp}" "${CONF}"
 }
