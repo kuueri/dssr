@@ -8,6 +8,7 @@
 #   DSSR_VERSION  release tag to install, for example 0.1.0 (default: the latest release)
 #
 # A second run upgrades the binary and the unit file, keeps /etc/dssr/dssr.yaml, and restarts dssr.
+# The user that runs sudo joins the group dssr, so it can run the dssr subcommands without sudo.
 set -Eeuo pipefail
 shopt -s inherit_errexit
 IFS=$'\n\t'
@@ -68,7 +69,7 @@ main() {
 		[[ ${url} =~ ^https?://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~/-]*)?$ ]] || die "DSSR_OAI_URL must be an http or https URL without a query"
 	fi
 	local cmd
-	for cmd in curl awk tar sha256sum od install useradd systemctl journalctl; do
+	for cmd in curl awk tar sha256sum od install useradd usermod systemctl journalctl; do
 		command -v "${cmd}" >/dev/null || die "${cmd} is required"
 	done
 
@@ -110,6 +111,16 @@ main() {
 		useradd --system --no-create-home --shell "$(command -v nologin || echo /bin/false)" dssr
 	fi
 
+	local added=""
+	if [[ -n ${SUDO_USER:-} && ${SUDO_USER} != root && " $(id -nG "${SUDO_USER}") " != *" dssr "* ]]; then
+		log "adding ${SUDO_USER} to group dssr"
+		if usermod -aG dssr "${SUDO_USER}"; then
+			added=${SUDO_USER}
+		else
+			log "warning: cannot add ${SUDO_USER} to group dssr"
+		fi
+	fi
+
 	local token=""
 	if [[ ! -e ${CONF} ]]; then
 		log "writing ${CONF}"
@@ -132,12 +143,15 @@ main() {
 
 	printf '\ndssr %s is installed and running.\n\n' "$("${BIN}" --version)"
 	printf '  Configuration  %s\n' "${CONF}"
-	printf '  Status         sudo -u dssr dssr status --config %s\n' "${CONF}"
+	printf '  Status         dssr status\n'
 	printf '  Log            journalctl -u dssr -f\n'
 	printf '  HTTP API       http://127.0.0.1:8080\n'
 	if [[ -n ${token} ]]; then
 		printf '\n  Client token   %s\n' "${token}"
 		printf '  dssr keeps only the hash of this token. Store the token now.\n'
+	fi
+	if [[ -n ${added} ]]; then
+		printf '\n  %s is now in the group dssr. Log in again to run dssr without sudo.\n' "${added}"
 	fi
 }
 

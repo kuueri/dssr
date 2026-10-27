@@ -35,15 +35,17 @@ import (
 )
 
 const usage = `Usage:
-  dssr serve   [--config dssr.yaml]
-  dssr harvest [--config dssr.yaml] [--source ID] [--full]
-  dssr search  [--config dssr.yaml] <query> [--type T]... [--year 2020-2024] [--collection C]... [--language L]... [--sort newest] [--page 1] [--limit 10] [--json]
-  dssr get     [--config dssr.yaml] <id> [--json]
-  dssr status  [--config dssr.yaml] [--json]
-  dssr eval    [--config dssr.yaml] <file>
+  dssr serve   [--config FILE]
+  dssr harvest [--config FILE] [--source ID] [--full]
+  dssr search  [--config FILE] <query> [--type T]... [--year 2020-2024] [--collection C]... [--language L]... [--sort newest] [--page 1] [--limit 10] [--json]
+  dssr get     [--config FILE] <id> [--json]
+  dssr status  [--config FILE] [--json]
+  dssr eval    [--config FILE] <file>
   dssr update
   dssr uninstall
   dssr --version
+
+FILE defaults to /etc/dssr/dssr.yaml.
 `
 
 func main() {
@@ -122,7 +124,7 @@ func parse(fs *flag.FlagSet, args []string) []string {
 func newFlags(name string) (*flag.FlagSet, *string) {
 	fs := flag.NewFlagSet(name, flag.ExitOnError)
 	fs.Usage = func() { fmt.Fprint(os.Stderr, usage) }
-	return fs, fs.String("config", "dssr.yaml", "configuration file")
+	return fs, fs.String("config", configFile, "configuration file")
 }
 
 func serve(args []string) error {
@@ -196,7 +198,7 @@ func listenUnix(path string) (net.Listener, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := os.Chmod(path, 0o600); err != nil {
+	if err := os.Chmod(path, 0o660); err != nil {
 		ln.Close()
 		return nil, err
 	}
@@ -205,6 +207,9 @@ func listenUnix(path string) (net.Listener, error) {
 
 func call(cfgPath, method, path string) ([]byte, error) {
 	cfg, err := config.Load(cfgPath)
+	if errors.Is(err, fs.ErrPermission) {
+		return nil, fmt.Errorf("%w; run as root, or add your user to the dssr group with sudo usermod -aG dssr $USER and log in again", err)
+	}
 	if err != nil {
 		return nil, err
 	}

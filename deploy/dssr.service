@@ -9,9 +9,9 @@ Group=dssr
 ExecStart=/usr/local/bin/dssr serve --config /etc/dssr/dssr.yaml
 Restart=on-failure
 RestartSec=10s
-# /run/dssr holds admin.sock, /var/lib/dssr holds the index
+# /run/dssr holds admin.sock for the dssr group, /var/lib/dssr holds the index
 RuntimeDirectory=dssr
-RuntimeDirectoryMode=0700
+RuntimeDirectoryMode=0750
 StateDirectory=dssr
 StateDirectoryMode=0700
 NoNewPrivileges=true
