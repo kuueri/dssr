@@ -42,6 +42,7 @@ const usage = `Usage:
   dssr status  [options]
   dssr eval    [options] <file>
   dssr update
+  dssr reindex
   dssr uninstall
   dssr --version
 
@@ -102,6 +103,14 @@ With DSSR_VERSION, dssr installs that release, for example a pre-release:
 
 dssr does nothing if the release is not newer than the installed version.
 `,
+	"reindex": `Usage: sudo dssr reindex
+
+Delete the index and harvest every record again.
+Run it after a release that changes the index, because the index keeps the analyzer and the mapping from the time dssr made it.
+dssr stops, deletes the directory at index_path, and starts again.
+Search results stay incomplete until the harvest of each source ends.
+Run it only when every source answers OAI-PMH, because the index starts empty.
+`,
 	"uninstall": `Usage: sudo dssr uninstall
 
 Stop dssr and remove it from this host.
@@ -123,6 +132,7 @@ func main() {
 		"status":    status,
 		"eval":      eval,
 		"update":    update,
+		"reindex":   reindex,
 		"uninstall": uninstall,
 	}
 	switch arg := os.Args[1]; {
@@ -755,6 +765,54 @@ func uninstall(args []string) error {
 	}
 	fmt.Println("dssr uninstalled")
 	fmt.Println("journald keeps past dssr entries in the system journal; it cannot delete one unit's history")
+	return nil
+}
+
+func reindex(args []string) error {
+	flags := flag.NewFlagSet("reindex", flag.ExitOnError)
+	flags.Usage = func() { fmt.Fprint(flags.Output(), commandHelp["reindex"]) }
+	flags.Parse(args)
+	if flags.NArg() != 0 {
+		return errors.New("reindex takes no arguments")
+	}
+	if os.Geteuid() != 0 {
+		return errors.New("run as root: sudo dssr reindex")
+	}
+
+	indexPath, adminSocket, err := uninstallPaths(configFile)
+	if err != nil {
+		return err
+	}
+	indexPath = filepath.Clean(indexPath)
+	if err := checkRemovable(indexPath); err != nil {
+		return err
+	}
+	if _, err := os.Stat(filepath.Join(indexPath, "index_meta.json")); err != nil {
+		return fmt.Errorf("%s is not a dssr index: %w", indexPath, err)
+	}
+	systemctl, err := exec.LookPath("systemctl")
+	if err != nil {
+		return errors.New("systemctl not found; stop dssr, delete the index directory, and start dssr by hand")
+	}
+
+	if out, err := exec.Command(systemctl, "stop", "dssr.service").CombinedOutput(); err != nil {
+		return fmt.Errorf("stop dssr.service: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	if exec.Command(systemctl, "is-active", "--quiet", "dssr.service").Run() == nil {
+		return errors.New("dssr.service is still active; stop it and run reindex again")
+	}
+	if c, err := net.Dial("unix", adminSocket); err == nil {
+		c.Close()
+		return fmt.Errorf("%s is in use; stop dssr and run reindex again", adminSocket)
+	}
+	if err := os.RemoveAll(indexPath); err != nil {
+		return fmt.Errorf("remove %s: %w; dssr is stopped", indexPath, err)
+	}
+	if out, err := exec.Command(systemctl, "start", "dssr.service").CombinedOutput(); err != nil {
+		return fmt.Errorf("start dssr.service: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	fmt.Printf("removed %s; dssr is harvesting every record again\n", indexPath)
+	fmt.Println("run dssr status to follow the harvest")
 	return nil
 }
 
