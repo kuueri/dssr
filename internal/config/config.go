@@ -75,9 +75,6 @@ func (c *Config) validate() error {
 			return fmt.Errorf("client %q: token_sha256 must be 64 hex characters", cl.Name)
 		}
 	}
-	if len(c.Sources) == 0 {
-		return errors.New("at least one source is required")
-	}
 	seen := map[string]bool{}
 	for i := range c.Sources {
 		s := &c.Sources[i]

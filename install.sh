@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Install or upgrade dssr as a systemd service from a GitHub release.
 #
-#   curl -fsSL https://raw.githubusercontent.com/kuueri/dssr/main/install.sh | sudo DSSR_OAI_URL=https://example.org/oai/request bash
+#   curl -fsSL https://raw.githubusercontent.com/kuueri/dssr/main/install.sh | sudo bash
 #
 # Environment:
-#   DSSR_OAI_URL  OAI-PMH base URL of the first source, required when /etc/dssr/dssr.yaml does not exist
 #   DSSR_VERSION  release tag to install, for example 0.1.0 (default: the latest release)
 #
+# The first run writes /etc/dssr/dssr.yaml with a client token and no source; add the sources there and restart dssr.
 # A second run upgrades the binary and the unit file, keeps /etc/dssr/dssr.yaml, and restarts dssr.
 # The user that runs sudo joins the group dssr, so it can run the dssr subcommands without sudo.
 set -Eeuo pipefail
@@ -38,9 +38,7 @@ cleanup() {
 }
 
 write_config() {
-	local hash=$1 url=$2 tmp=${WORK_DIR}/dssr.yaml host
-	host=${url#*://}
-	host=${host%%[:/]*}
+	local hash=$1 tmp=${WORK_DIR}/dssr.yaml
 	tee "${tmp}" >/dev/null <<EOF
 listen: 127.0.0.1:8080
 index_path: /var/lib/dssr/index
@@ -51,23 +49,19 @@ clients:
   - name: default
     token_sha256: ${hash}
 
-sources:
-  - id: repo
-    name: "${host}"
-    oai_url: "${url}"
-    metadata_prefix: oai_dc
-    schedule: "0 3 * * 1"
+# Add each OAI-PMH source, then run: sudo systemctl restart dssr
+# sources:
+#   - id: repo
+#     name: Institutional Repository
+#     oai_url: https://example.org/oai/request
+#     metadata_prefix: oai_dc
+#     schedule: "0 3 * * 1"
 EOF
 	install -m 0640 -o root -g dssr "${tmp}" "${CONF}"
 }
 
 main() {
 	[[ ${EUID} -eq 0 ]] || die "run as root: curl -fsSL https://raw.githubusercontent.com/${REPO}/main/install.sh | sudo bash"
-	local url=${DSSR_OAI_URL:-}
-	if [[ ! -e ${CONF} ]]; then
-		[[ -n ${url} ]] || die "the first install needs DSSR_OAI_URL: curl -fsSL https://raw.githubusercontent.com/${REPO}/main/install.sh | sudo DSSR_OAI_URL=https://example.org/oai/request bash"
-		[[ ${url} =~ ^https?://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~/-]*)?$ ]] || die "DSSR_OAI_URL must be an http or https URL without a query"
-	fi
 	local cmd
 	for cmd in curl awk tar sha256sum od install useradd usermod systemctl journalctl; do
 		command -v "${cmd}" >/dev/null || die "${cmd} is required"
@@ -126,7 +120,7 @@ main() {
 		log "writing ${CONF}"
 		install -d -m 0755 "${CONF_DIR}"
 		token=$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')
-		write_config "$(printf '%s' "${token}" | sha256sum | cut -d ' ' -f 1)" "${url}"
+		write_config "$(printf '%s' "${token}" | sha256sum | cut -d ' ' -f 1)"
 	else
 		log "keeping ${CONF}"
 	fi
@@ -149,6 +143,7 @@ main() {
 	if [[ -n ${token} ]]; then
 		printf '\n  Client token   %s\n' "${token}"
 		printf '  dssr keeps only the hash of this token. Store the token now.\n'
+		printf '\n  dssr has no source yet. Add the sources to %s, then run: sudo systemctl restart dssr\n' "${CONF}"
 	fi
 	if [[ -n ${added} ]]; then
 		printf '\n  %s is now in the group dssr. Log in again to run dssr without sudo.\n' "${added}"
