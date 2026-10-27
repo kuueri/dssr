@@ -4,6 +4,24 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.5] - 2026-10-27
+
+### Added
+
+- `sudo dssr reindex` stops dssr, deletes the index, and starts dssr, which then harvests every record of each source again. Run it after a release that changes the index, such as this one.
+- `dssr <command> --help` describes each command and its options.
+
+### Changed
+
+- Search matches Indonesian words that differ only in affixes, for example `pembelajaran` and `belajar`, or `perkantoran` and `kantor`. An existing index keeps searching without this until you run `sudo dssr update` and then `sudo dssr reindex`.
+- `install.sh` no longer needs `DSSR_OAI_URL`. A new install writes `/etc/dssr/dssr.yaml` with a client token and an example source in comments; add the sources there and run `sudo systemctl restart dssr`. dssr now starts without a source and harvests nothing until the file has one.
+- The install command is now `curl -fsSL https://kuueri.com/dssr/install.sh | sudo bash`, which runs `install.sh` from the latest release. Each release carries `install.sh` as an asset.
+- dssr is marked experimental: the API, the configuration, and the index format may change without notice.
+
+### Fixed
+
+- `dssr update` with `DSSR_VERSION` does nothing when that release is not newer than the installed version, instead of installing it.
+
 ## [0.0.4] - 2026-10-27
 
 ### Added
@@ -43,6 +61,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `install.sh` to install or upgrade dssr as a systemd service from a GitHub release.
 - Release archives for linux/amd64 and linux/arm64 with SHA-256 checksums and the licenses of all dependencies.
 
+[0.0.5]: https://github.com/kuueri/dssr/compare/0.0.4...0.0.5
 [0.0.4]: https://github.com/kuueri/dssr/compare/0.0.3...0.0.4
 [0.0.3]: https://github.com/kuueri/dssr/compare/0.0.2...0.0.3
 [0.0.2]: https://github.com/kuueri/dssr/compare/0.0.1...0.0.2
