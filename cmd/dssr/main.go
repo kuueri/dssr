@@ -46,7 +46,7 @@ const usage = `Usage:
   dssr --version
 
 FILE defaults to /etc/dssr/dssr.yaml.
-DSSR_VERSION=X.Y.Z makes update install that release instead of the latest one.
+DSSR_VERSION=X.Y.Z makes update install that release instead of the latest one, if it is newer.
 `
 
 func main() {
@@ -482,26 +482,31 @@ func update(args []string) error {
 		return errors.New("run as root: sudo dssr update")
 	}
 
+	current := cmp.Or(buildVersion, "devel")
+	fmt.Printf("Current version: %s\n", current)
 	tag := os.Getenv("DSSR_VERSION")
 	if tag == "" {
+		fmt.Println("Checking for updates to latest version...")
 		latest, err := latestRelease(latestReleaseURL)
 		if err != nil {
 			return fmt.Errorf("%w; to install a pre-release, run: sudo DSSR_VERSION=<version> dssr update", err)
 		}
-		if !newer(latest, buildVersion) {
-			fmt.Printf("dssr %s is up to date, the latest release is %s\n", version(), latest)
-			return nil
-		}
 		tag = latest
 	} else if !versionRE.MatchString(tag) {
 		return fmt.Errorf("DSSR_VERSION %q is not a version like 0.1.0", tag)
+	} else {
+		fmt.Printf("Checking for updates to version %s...\n", tag)
+	}
+	if !newer(tag, buildVersion) {
+		fmt.Printf("dssr is up to date (%s)\n", current)
+		return nil
 	}
 
 	script, err := fetch(fmt.Sprintf(installScriptURL, tag))
 	if err != nil {
 		return err
 	}
-	fmt.Printf("updating dssr %s to %s\n", version(), tag)
+	fmt.Printf("Updating dssr %s to %s...\n", current, tag)
 	cmd := exec.Command("bash")
 	cmd.Stdin = bytes.NewReader(script)
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
