@@ -1,0 +1,19 @@
+<oai_dc:dc xmlns:oai_dc="http://www.openarchives.org/OAI/2.0/oai_dc/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.openarchives.org/OAI/2.0/oai_dc/ http://www.openarchives.org/OAI/2.0/oai_dc.xsd">
+	<dc:title>Pengantar ilmu perpustakaan</dc:title>
+	<dc:creator>Example, Author</dc:creator>
+	<dc:subject>Perpustakaan</dc:subject>
+	<dc:publisher>Example Publisher</dc:publisher>
+	<dc:date>2020-05-01T00:00:00Z</dc:date>
+	<dc:date>1991</dc:date>
+	<dc:language>id</dc:language>
+	<dc:type>Text</dc:type>
+	<dc:identifier>https://catalog.example.org/index.php?p=show_detail&amp;id=1</dc:identifier>
+	<dc:identifier_isbn>9794030449</dc:identifier_isbn>
+	<dc:identifier>020 EXA p</dc:identifier>
+	<dc:description>Bibliografi: hlm. 517-524</dc:description>
+	<dc:coverage>Jakarta</dc:coverage>
+	<dc:format>xvi, 545 hlm.; 21 cm</dc:format>
+	<dc:subject>020</dc:subject>
+	<dc:description></dc:description>
+	<image>https://catalog.example.org/images/default/image.png</image>
+</oai_dc:dc>

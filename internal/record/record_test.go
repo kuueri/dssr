@@ -50,6 +50,36 @@ func TestFromDIM(t *testing.T) {
 	}
 }
 
+func TestFromOAIDC(t *testing.T) {
+	b, err := os.ReadFile("testdata/oai_dc.xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, dropped, err := FromOAIDC(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := Record{
+		Title:      "Pengantar ilmu perpustakaan",
+		Creator:    []string{"Example, Author"},
+		Issued:     "1991",
+		Subject:    []string{"Perpustakaan", "020"},
+		Abstract:   []string{"Bibliografi: hlm. 517-524"},
+		Type:       []string{"Text"},
+		Language:   []string{"id"},
+		Publisher:  []string{"Example Publisher"},
+		Identifier: []Identifier{{"isbn", "9794030449"}, {"", "020 EXA p"}},
+		URL:        "https://catalog.example.org/index.php?p=show_detail&id=1",
+	}
+	if !reflect.DeepEqual(r, want) {
+		t.Errorf("record\n got %+v\nwant %+v", r, want)
+	}
+	slices.Sort(dropped)
+	if w := []string{"dc.coverage", "dc.format", "image"}; !slices.Equal(dropped, w) {
+		t.Errorf("dropped %v, want %v", dropped, w)
+	}
+}
+
 func TestYear(t *testing.T) {
 	for issued, want := range map[string]string{"2019-05-01": "2019", "20": "", "n.d.": "", "": ""} {
 		if got := (Record{Issued: issued}).Year(); got != want {

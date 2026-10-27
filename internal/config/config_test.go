@@ -41,12 +41,22 @@ func TestLoadValid(t *testing.T) {
 	}
 }
 
+func TestLoadDefaultPrefix(t *testing.T) {
+	c, err := Load(write(t, strings.Replace(valid, "    metadata_prefix: dim\n", "", 1)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := c.Sources[0].MetadataPrefix; p != "oai_dc" {
+		t.Fatalf("metadata_prefix = %q, want oai_dc", p)
+	}
+}
+
 func TestLoadRejects(t *testing.T) {
 	cases := map[string]struct{ old, new, want string }{
 		"unknown key":  {"timezone:", "timezon:", "not found"},
 		"bad hash":     {"9f86d081", "zz86d081", "token_sha256"},
 		"bad schedule": {`"0 3 * * 1"`, `"every monday"`, "schedule"},
-		"bad prefix":   {"metadata_prefix: dim", "metadata_prefix: oai_dc", "metadata_prefix"},
+		"bad prefix":   {"metadata_prefix: dim", "metadata_prefix: marcxml", "metadata_prefix"},
 		"bad id":       {"id: repo", "id: Repo:1", "source id"},
 		"bad url":      {"https://repository", "ftp://repository", "oai_url"},
 		"long socket":  {"/run/dssr/", "/run/" + strings.Repeat("d", 100) + "/", "admin_socket"},
