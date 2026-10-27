@@ -61,6 +61,7 @@ func TestSearch(t *testing.T) {
 		{"contributor", Query{Q: "santoso"}, "repo:1/2"},
 		{"stop words ignored", Query{Q: "wisata dan yang the"}, "repo:1/1,repo:1/3"},
 		{"fuzzy one edit", Query{Q: "jeramy"}, "repo:1/2"},
+		{"affix variant", Query{Q: "memasarkan"}, "repo:1/3"},
 		{"phrase", Query{Q: `"wisata halal"`}, "repo:1/3"},
 		{"or fallback", Query{Q: "ziarah ternak"}, "repo:1/1,repo:1/2"},
 		{"type filter", Query{Q: "wisata", Types: []string{"Article"}}, "repo:1/3"},
