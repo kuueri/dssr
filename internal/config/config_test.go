@@ -51,6 +51,17 @@ func TestLoadDefaultPrefix(t *testing.T) {
 	}
 }
 
+func TestLoadNoSources(t *testing.T) {
+	head, _, _ := strings.Cut(valid, "sources:")
+	c, err := Load(write(t, head+"# sources:\n#   - id: repo\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(c.Sources) != 0 {
+		t.Fatalf("sources = %+v, want none", c.Sources)
+	}
+}
+
 func TestLoadRejects(t *testing.T) {
 	cases := map[string]struct{ old, new, want string }{
 		"unknown key":  {"timezone:", "timezon:", "not found"},
