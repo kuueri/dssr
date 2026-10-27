@@ -121,6 +121,8 @@ main() {
 		install -d -m 0755 "${CONF_DIR}"
 		token=$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')
 		write_config "$(printf '%s' "${token}" | sha256sum | cut -d ' ' -f 1)"
+		printf '\n  Client token   %s\n' "${token}"
+		printf '  dssr keeps only the hash of this token. Store the token now.\n\n'
 	else
 		log "keeping ${CONF}"
 	fi
@@ -139,10 +141,8 @@ main() {
 	printf '  Configuration  %s\n' "${CONF}"
 	printf '  Status         dssr status\n'
 	printf '  Log            journalctl -u dssr -f\n'
-	printf '  HTTP API       http://127.0.0.1:8080\n'
+	printf '  HTTP API       http://%s\n' "$(awk '$1 == "listen:" { print $2; exit }' "${CONF}" | tr -d "\"'")"
 	if [[ -n ${token} ]]; then
-		printf '\n  Client token   %s\n' "${token}"
-		printf '  dssr keeps only the hash of this token. Store the token now.\n'
 		printf '\n  dssr has no source yet. Add the sources to %s, then run: sudo systemctl restart dssr\n' "${CONF}"
 	fi
 	if [[ -n ${added} ]]; then
