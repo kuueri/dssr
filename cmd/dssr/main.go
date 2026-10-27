@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"cmp"
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -43,6 +46,7 @@ const usage = `Usage:
   dssr eval    [options] <file>
   dssr update
   dssr reindex
+  dssr revoke
   dssr uninstall
   dssr --version
 
@@ -111,6 +115,12 @@ dssr stops, deletes the directory at index_path, and starts again.
 Search results stay incomplete until the harvest of each source ends.
 Run it only when every source answers OAI-PMH, because the index starts empty.
 `,
+	"revoke": `Usage: sudo dssr revoke
+
+Revoke the client token, make a new one, and show the new token one time.
+dssr keeps only the hash of the token in /etc/dssr/dssr.yaml, then restarts, so the old token stops working.
+Give the new token to the client service, which sends it in the header Authorization: Bearer <token>.
+`,
 	"uninstall": `Usage: sudo dssr uninstall
 
 Stop dssr and remove it from this host.
@@ -133,6 +143,7 @@ func main() {
 		"eval":      eval,
 		"update":    update,
 		"reindex":   reindex,
+		"revoke":    revoke,
 		"uninstall": uninstall,
 	}
 	switch arg := os.Args[1]; {
@@ -814,6 +825,136 @@ func reindex(args []string) error {
 	fmt.Printf("removed %s; dssr is harvesting every record again\n", indexPath)
 	fmt.Println("run dssr status to follow the harvest")
 	return nil
+}
+
+func revoke(args []string) error {
+	flags := flag.NewFlagSet("revoke", flag.ExitOnError)
+	flags.Usage = func() { fmt.Fprint(flags.Output(), commandHelp["revoke"]) }
+	flags.Parse(args)
+	if flags.NArg() != 0 {
+		return errors.New("revoke takes no arguments")
+	}
+	if os.Geteuid() != 0 {
+		return errors.New("run as root: sudo dssr revoke")
+	}
+
+	secret := make([]byte, 32)
+	rand.Read(secret)
+	tok := "sk-" + hex.EncodeToString(secret)
+	sum := sha256.Sum256([]byte(tok))
+
+	b, err := os.ReadFile(configFile)
+	if err != nil {
+		return err
+	}
+	out, replaced, err := setClientToken(b, "default", hex.EncodeToString(sum[:]))
+	if err != nil {
+		return fmt.Errorf("%s: %w", configFile, err)
+	}
+	if err := replaceConfig(configFile, out); err != nil {
+		return err
+	}
+
+	fmt.Printf("New token, shown one time, store it now:\n%s\n", tok)
+	if replaced {
+		fmt.Println("The previous token no longer works.")
+	}
+	if out, err := exec.Command("systemctl", "try-restart", "dssr.service").CombinedOutput(); err != nil {
+		return fmt.Errorf("the token is saved, but restarting dssr.service failed: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+func setClientToken(data []byte, name, hash string) ([]byte, bool, error) {
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return nil, false, err
+	}
+	if len(doc.Content) != 1 || doc.Content[0].Kind != yaml.MappingNode {
+		return nil, false, errors.New("the configuration is not a YAML mapping")
+	}
+	root := doc.Content[0]
+	var clients *yaml.Node
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		if root.Content[i].Value == "clients" {
+			clients = root.Content[i+1]
+		}
+	}
+	if clients == nil {
+		clients = &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
+		root.Content = append(root.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "clients"}, clients)
+	}
+	if clients.Kind == yaml.ScalarNode && clients.Tag == "!!null" {
+		clients.Kind, clients.Tag, clients.Value = yaml.SequenceNode, "!!seq", ""
+	}
+	if clients.Kind != yaml.SequenceNode {
+		return nil, false, errors.New("clients is not a list")
+	}
+
+	replaced := false
+	for _, c := range clients.Content {
+		var nameNode, hashNode *yaml.Node
+		for i := 0; i+1 < len(c.Content); i += 2 {
+			switch c.Content[i].Value {
+			case "name":
+				nameNode = c.Content[i+1]
+			case "token_sha256":
+				hashNode = c.Content[i+1]
+			}
+		}
+		if nameNode != nil && nameNode.Value == name && hashNode != nil {
+			hashNode.Tag, hashNode.Value = "!!str", hash
+			replaced = true
+		}
+	}
+	if !replaced {
+		scalar := func(v string) *yaml.Node { return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: v} }
+		clients.Content = append(clients.Content, &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map", Content: []*yaml.Node{
+			scalar("name"), scalar(name), scalar("token_sha256"), scalar(hash),
+		}})
+	}
+
+	var buf bytes.Buffer
+	enc := yaml.NewEncoder(&buf)
+	enc.SetIndent(2)
+	if err := enc.Encode(&doc); err != nil {
+		return nil, false, err
+	}
+	if err := enc.Close(); err != nil {
+		return nil, false, err
+	}
+	return buf.Bytes(), replaced, nil
+}
+
+func replaceConfig(path string, data []byte) error {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	f, err := os.CreateTemp(filepath.Dir(path), ".dssr.yaml.*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(f.Name())
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(f.Name(), fi.Mode().Perm()); err != nil {
+		return err
+	}
+	if st, ok := fi.Sys().(*syscall.Stat_t); ok {
+		if err := os.Chown(f.Name(), int(st.Uid), int(st.Gid)); err != nil {
+			return err
+		}
+	}
+	if _, err := config.Load(f.Name()); err != nil {
+		return err
+	}
+	return os.Rename(f.Name(), path)
 }
 
 func uninstallPaths(path string) (indexPath, adminSocket string, err error) {

@@ -119,7 +119,7 @@ main() {
 	if [[ ! -e ${CONF} ]]; then
 		log "writing ${CONF}"
 		install -d -m 0755 "${CONF_DIR}"
-		token=$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')
+		token=sk-$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')
 		write_config "$(printf '%s' "${token}" | sha256sum | cut -d ' ' -f 1)"
 		printf '\n  Client token   %s\n' "${token}"
 		printf '  dssr keeps only the hash of this token. Store the token now.\n\n'
