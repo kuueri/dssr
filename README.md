@@ -29,8 +29,8 @@ The script does these steps:
 After the install, add each source under `sources` in `/etc/dssr/dssr.yaml` and restart dssr, as [Configure](#configure) describes.
 The first harvest of a source reads all its records.
 
-At the end, the script shows the client token one time.
-dssr keeps only the hash of the token, so store the token immediately.
+When the script writes the file, it shows the client token one time.
+dssr keeps only the hash of the token, so store the token immediately, or make a new one later with `sudo dssr revoke`.
 
 To install a specific release, add `DSSR_VERSION=0.1.0` after `sudo`.
 
@@ -51,14 +51,15 @@ dssr does not start if the file has an unknown key or an incorrect value.
 | `clients`      | `name` and `token_sha256` of each client service                                                                            |
 | `sources`      | `id`, `name`, `oai_url`, `metadata_prefix` (`oai_dc` by default, or `dim`), and `schedule` (cron expression) of each source |
 
-To add a client service, make a token and its hash:
+To replace the client token, for example when it is lost or leaked, run:
 
 ```bash
-TOKEN=$(openssl rand -hex 32)
-printf '%s' "$TOKEN" | sha256sum
+sudo dssr revoke
 ```
 
-Add the hash to `clients`, restart dssr, and give the token to the client service.
+It writes the hash of a new `sk-` token to the client `default`, restarts dssr, and shows the token one time.
+The previous token stops working.
+Give the token to the client service, which sends it in the header `Authorization: Bearer <token>`.
 
 ## Update
 
