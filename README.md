@@ -108,6 +108,8 @@ dssr harvest --full
 | `dssr harvest [--source ID] [--full]` | Start a harvest now                                                        |
 | `dssr eval <file>`                    | Measure search relevance with a list of queries                            |
 
+Run `dssr <command> --help` to see the options of a command.
+
 Client services use the HTTP API with a bearer token:
 
 ```bash
