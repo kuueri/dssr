@@ -535,7 +535,7 @@ func eval(args []string) error {
 			hits++
 			fmt.Printf("HIT  %2d  %s\n", rank, c.Q)
 		} else {
-			fmt.Printf("MISS  -  %s\n", c.Q)
+			fmt.Printf("MISS  -  %s (total %d, expect %s)\n", c.Q, res.Total, strings.Join(c.Expect, ", "))
 		}
 	}
 	if len(cases) == 0 {
