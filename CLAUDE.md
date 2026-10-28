@@ -45,7 +45,7 @@ Each document stores the full record as JSON in the unindexed field `record`, an
 
 ## Invariants
 
-- The incremental `from` is the cursor minus 24 hours, because a DSpace datestamp is the change time, not the time the record reached the OAI core. The cursor advances only after a successful run.
+- The incremental `from` is the cursor minus 24 hours, because a DSpace datestamp is the change time, not the time the record reached the OAI core. It is sent as a date without a time, because SLiMS rejects a time in `from` although its `Identify` declares seconds, and OAI-PMH requires every repository to accept a date. The cursor advances only after a successful run.
 - A full harvest is mark-and-sweep by generation. The sweep is skipped when the run fails or sees fewer than 90% of the indexed records, because DSpace answers `noRecordsMatch` when its OAI core is empty or Solr fails.
 - Bleve persists its index mapping at creation, so a change to `newMapping` or the analyzer requires `sudo dssr reindex`, while a change to the `record` mapping requires `dssr harvest --full`.
 - The whitelist keeps only the `dc` schema and drops `dc.description.provenance` (staff names and e-mail addresses) and every non-`dc` schema (may hold student numbers). `oai_dc` (the default prefix) has no qualifiers, so the whitelist cannot drop provenance from it and relies on the source crosswalk to leave it out, as the stock DSpace 6.3 `oai_dc.xsl` does. Every unqualified `dc:description` maps to `abstract`, because only `abstract` is searched. `dssr status` counts dropped fields, and that count is how the whitelist grows.
