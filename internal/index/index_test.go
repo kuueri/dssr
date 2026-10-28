@@ -85,6 +85,31 @@ func TestSearch(t *testing.T) {
 	}
 }
 
+func TestSearchMostWords(t *testing.T) {
+	x := open(t)
+	if err := x.Apply([]record.Record{
+		{ID: "slims:1", Source: "slims", Title: "Hukum acara pidana"},
+		{ID: "repo:2/1", Source: "repo", Title: "Pemalsuan data wali nikah", Abstract: []string{"Penulis mencari buku hukum acara pidana di perpustakaan."}},
+	}, nil, "1"); err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct{ q, in, out string }{
+		{"cari buku hukum acara pidana", "slims:1", ""},
+		{"buku hukum pidana", "repo:2/1", "slims:1"},
+		{`"wali nikah" cari buku hukum acara`, "repo:2/1", "slims:1"},
+	}
+	for _, c := range cases {
+		r, err := x.Search(Query{Q: c.q, Page: 1, Limit: 10})
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := ids(r)
+		if !strings.Contains(got, c.in) || (c.out != "" && strings.Contains(got, c.out)) {
+			t.Errorf("%q: got %q, want %s and not %q", c.q, got, c.in, c.out)
+		}
+	}
+}
+
 func TestSearchResultShape(t *testing.T) {
 	x := open(t)
 	r, err := x.Search(Query{Q: "wisata", Page: 1, Limit: 10})
