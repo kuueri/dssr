@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.7] - 2026-10-27
+
+### Added
+
+- `sudo dssr revoke` replaces the client token for `default`, writes the hash of the new token to the configuration, restarts dssr, and shows the token one time. The previous token stops working.
+
+### Changed
+
+- New tokens from `install.sh` and `dssr revoke` start with `sk-`; existing tokens keep working until they are revoked.
+
+### Fixed
+
+- The incremental harvest sends `from` as a date without a time, because SLiMS rejects a timestamp although its `Identify` declares seconds. OAI-PMH requires every repository to accept a date.
+
 ## [0.0.6] - 2026-10-27
 
 ### Fixed
@@ -67,6 +81,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `install.sh` to install or upgrade dssr as a systemd service from a GitHub release.
 - Release archives for linux/amd64 and linux/arm64 with SHA-256 checksums and the licenses of all dependencies.
 
+[0.0.7]: https://github.com/kuueri/dssr/compare/0.0.6...0.0.7
 [0.0.6]: https://github.com/kuueri/dssr/compare/0.0.5...0.0.6
 [0.0.5]: https://github.com/kuueri/dssr/compare/0.0.4...0.0.5
 [0.0.4]: https://github.com/kuueri/dssr/compare/0.0.3...0.0.4
