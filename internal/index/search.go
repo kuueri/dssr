@@ -87,7 +87,13 @@ func (x *Index) Search(q Query) (*Result, error) {
 	}
 	filter := filters(q)
 
-	bq := query.NewBooleanQuery(clauses, should, nil)
+	must := clauses
+	if n := len(tokens); n >= 4 {
+		terms := query.NewDisjunctionQuery(clauses[:n])
+		terms.SetMin(float64(n * 3 / 4))
+		must = append([]query.Query{terms}, clauses[n:]...)
+	}
+	bq := query.NewBooleanQuery(must, should, nil)
 	bq.AddFilter(filter)
 	res, err := x.b.Search(x.request(bq, q))
 	if err == nil && res.Total == 0 && len(clauses) > 1 {
