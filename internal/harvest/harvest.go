@@ -197,7 +197,7 @@ func (h *Harvester) harvest(src config.Source, full bool, run *Run, dropped map[
 			if err != nil {
 				return fmt.Errorf("stored cursor %q: %w", cur, err)
 			}
-			from = t.Add(-24 * time.Hour).UTC().Format("2006-01-02T15:04:05Z")
+			from = t.Add(-24 * time.Hour).UTC().Format(time.DateOnly)
 		}
 	}
 
