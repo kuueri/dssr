@@ -106,7 +106,7 @@ func TestIncrementalThenFull(t *testing.T) {
 	if _, err := h.Run("repo", false); err != nil {
 		t.Fatal(err)
 	}
-	if f.froms[0] != "" || f.froms[1] != "2026-10-25T05:00:00Z" {
+	if f.froms[0] != "" || f.froms[1] != "2026-10-25" {
 		t.Fatalf("from values %q", f.froms)
 	}
 	if r, _ := idx.Get("repo:1/2"); r.Title != "Pakan jerami padi" {
