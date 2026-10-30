@@ -472,7 +472,7 @@ checksum = "117240f60069e65410b3ae1bb213295bd828f707b5bec6596a1afc8793ce0cbc"
 
 [[package]]
 name = "dssr"
-version = "0.1.0"
+version = "0.0.10"
 dependencies = [
  "axum",
  "chrono",

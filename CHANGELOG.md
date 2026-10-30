@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.10] - 2026-10-31
+
+### Changed
+
+- dssr is now one static binary built in Rust, and its search index uses tantivy. The HTTP API, `dssr.yaml`, the subcommands and their options, and the systemd unit stay the same, and search returns the same totals and ranks results as 0.0.9 did.
+- Search answers faster and dssr needs less memory and disk: on 13,898 records, p95 latency fell from 41 ms to 24 ms, memory from 90 MB to 38 MB, and the index from 74 MB to 29 MB.
+- The cursor, generation, and suspension of each source live in `state.json` next to the index. `sudo dssr reindex` still removes them with the index.
+
+### Removed
+
+- The `linux/arm64` release archive. `install.sh` and `dssr update` now stop on hosts that are not `x86_64`.
+
+This release changes the index. Run `sudo dssr update` and then `sudo dssr reindex`. Until the reindex, dssr refuses to start on the old index, so the update reports that dssr did not start.
+
 ## [0.0.9] - 2026-10-30
 
 ### Fixed
@@ -104,6 +118,7 @@ This release changes the index. Run `sudo dssr update` and then `sudo dssr reind
 - `install.sh` to install or upgrade dssr as a systemd service from a GitHub release.
 - Release archives for linux/amd64 and linux/arm64 with SHA-256 checksums and the licenses of all dependencies.
 
+[0.0.10]: https://github.com/kuueri/dssr/compare/0.0.9...0.0.10
 [0.0.9]: https://github.com/kuueri/dssr/compare/0.0.8...0.0.9
 [0.0.8]: https://github.com/kuueri/dssr/compare/0.0.7...0.0.8
 [0.0.7]: https://github.com/kuueri/dssr/compare/0.0.6...0.0.7
