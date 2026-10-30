@@ -81,7 +81,8 @@ When the user asks for release `X.Y.Z`:
 1. Read every commit since the previous tag with `git --no-pager log --oneline <previous-tag>..HEAD`, or the whole history when no tag exists.
 2. Add `## [X.Y.Z] - YYYY-MM-DD` above the previous version section, with entries under the Keep a Changelog headings (Added, Changed, Deprecated, Removed, Fixed, Security) written for operators, not per commit. The step is done when every user-visible change since the previous tag has an entry.
 3. Add the link reference `[X.Y.Z]: https://github.com/kuueri/dssr/compare/<previous-tag>...X.Y.Z`, or `https://github.com/kuueri/dssr/releases/tag/X.Y.Z` for the first release.
-4. Hand the user these commands: `git add CHANGELOG.md`, `git commit -m "release: X.Y.Z"`, `git tag -s X.Y.Z -m X.Y.Z`, `git push origin main X.Y.Z`.
+4. Set `version` of the `dssr` package to `X.Y.Z` in `Cargo.toml` and `Cargo.lock`, editing only those two lines. The commit subject must start with `release:`, because `ci.yml` skips that commit on `main` and the release workflow tests it instead.
+5. Hand the user these commands: `git add CHANGELOG.md Cargo.toml Cargo.lock`, `git commit -m "release: X.Y.Z"`, `git tag -s X.Y.Z -m X.Y.Z`, `git push origin main X.Y.Z`.
 
 The release workflow publishes the new section, followed by GitHub's generated change list, as the release notes.
 It fails when the tag is not a signed annotated tag that GitHub verifies, or when the section for the tag is missing or has no `- ` entries.
