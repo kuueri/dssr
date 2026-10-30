@@ -1,6 +1,7 @@
 package index
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -63,6 +64,8 @@ func TestSearch(t *testing.T) {
 		{"fuzzy one edit", Query{Q: "jeramy"}, "repo:1/2"},
 		{"affix variant", Query{Q: "memasarkan"}, "repo:1/3"},
 		{"phrase", Query{Q: `"wisata halal"`}, "repo:1/3"},
+		{"phrase in subject", Query{Q: `"pakan ternak"`}, "repo:1/2"},
+		{"phrase in creator", Query{Q: `"rahma siti"`}, "repo:1/1"},
 		{"or fallback", Query{Q: "ziarah ternak"}, "repo:1/1,repo:1/2"},
 		{"type filter", Query{Q: "wisata", Types: []string{"Article"}}, "repo:1/3"},
 		{"collection filter", Query{Q: "pakan wisata", Collections: []string{"Fakultas Peternakan"}}, "repo:1/2"},
@@ -106,6 +109,101 @@ func TestSearchMostWords(t *testing.T) {
 		got := ids(r)
 		if !strings.Contains(got, c.in) || (c.out != "" && strings.Contains(got, c.out)) {
 			t.Errorf("%q: got %q, want %s and not %q", c.q, got, c.in, c.out)
+		}
+	}
+}
+
+func TestTitlePhrase(t *testing.T) {
+	x := open(t)
+	if err := x.Apply([]record.Record{
+		{ID: "slims:10", Source: "slims", Title: "Bank dan lembaga keuangan lain: teori, praktik, regulasi, dan perkembangannya di Indonesia"},
+		{ID: "slims:11", Source: "slims", Title: "Lembaga keuangan bank"},
+		{ID: "slims:12", Source: "slims", Title: "Bank lembaga perkreditan rakyat keuangan"},
+	}, nil, "1"); err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct{ q, want string }{
+		{"bank lembaga keuangan", "slims:10,"},
+		{`"bank lembaga"`, "slims:12"},
+	}
+	for _, c := range cases {
+		r, err := x.Search(Query{Q: c.q, Page: 1, Limit: 10})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := ids(r) + ","; !strings.HasPrefix(got, c.want) || (!strings.HasSuffix(c.want, ",") && got != c.want+",") {
+			t.Errorf("%q: got %q, want %q", c.q, ids(r), c.want)
+		}
+	}
+}
+
+func TestScoresIgnoreSegments(t *testing.T) {
+	scores := func(batches [][]record.Record) []float64 {
+		x, err := Open(filepath.Join(t.TempDir(), "index"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer x.Close()
+		for _, b := range batches {
+			if err := x.Apply(b, nil, "1"); err != nil {
+				t.Fatal(err)
+			}
+		}
+		r, err := x.Search(Query{Q: "wisata", Page: 1, Limit: 10})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var s []float64
+		for _, h := range r.Results {
+			s = append(s, h.Score)
+		}
+		return s
+	}
+	one := scores([][]record.Record{fixtures})
+	many := scores([][]record.Record{fixtures[:1], fixtures[1:2], fixtures[2:]})
+	if len(one) == 0 || fmt.Sprint(one) != fmt.Sprint(many) {
+		t.Fatalf("one batch %v, three batches %v", one, many)
+	}
+}
+
+func TestTiesSortByID(t *testing.T) {
+	for _, order := range [][]string{{"slims:9", "slims:8"}, {"slims:8", "slims:9"}} {
+		x := open(t)
+		for _, id := range order {
+			if err := x.Apply([]record.Record{{ID: id, Source: "slims", Title: "Hukum lingkungan"}}, nil, "1"); err != nil {
+				t.Fatal(err)
+			}
+		}
+		for _, newest := range []bool{false, true} {
+			r, err := x.Search(Query{Q: "hukum lingkungan", Newest: newest, Page: 1, Limit: 10})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := ids(r); got != "slims:8,slims:9" {
+				t.Errorf("indexed %v, newest %t: got %q", order, newest, got)
+			}
+		}
+	}
+}
+
+func TestAnalyzers(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "index")
+	x, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	x.Close()
+	if x, err = Open(path); err != nil {
+		t.Fatal(err)
+	}
+	defer x.Close()
+	for name, want := range map[string]string{analyzer: "konsep@1 diri@3 islam@5", phraseAnalyzer: "konsep@1 diri@2 islam@3"} {
+		var got []string
+		for _, tok := range x.b.Mapping().AnalyzerNamed(name).Analyze([]byte("konsep dan diri of islam")) {
+			got = append(got, fmt.Sprintf("%s@%d", tok.Term, tok.Position))
+		}
+		if s := strings.Join(got, " "); s != want {
+			t.Errorf("%s after reopen: %s, want %s", name, s, want)
 		}
 	}
 }
