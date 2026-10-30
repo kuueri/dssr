@@ -1,6 +1,7 @@
 package harvest
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -23,6 +24,8 @@ import (
 var (
 	ErrBusy          = errors.New("a harvest is already running for this source")
 	ErrUnknownSource = errors.New("unknown source")
+	ErrSuspended     = errors.New("the schedule of this source is suspended")
+	ErrCancelled     = errors.New("harvest cancelled")
 )
 
 type Run struct {
@@ -37,18 +40,20 @@ type Run struct {
 }
 
 type SourceStatus struct {
-	ID      string         `json:"id"`
-	Name    string         `json:"name"`
-	Docs    uint64         `json:"docs"`
-	Cursor  string         `json:"cursor,omitempty"`
-	Next    *time.Time     `json:"next,omitempty"`
-	Running bool           `json:"running"`
-	Last    *Run           `json:"last,omitempty"`
-	Dropped map[string]int `json:"dropped,omitempty"`
+	ID        string         `json:"id"`
+	Name      string         `json:"name"`
+	Docs      uint64         `json:"docs"`
+	Cursor    string         `json:"cursor,omitempty"`
+	Suspended string         `json:"suspended,omitempty"`
+	Next      *time.Time     `json:"next,omitempty"`
+	Running   bool           `json:"running"`
+	Last      *Run           `json:"last,omitempty"`
+	Dropped   map[string]int `json:"dropped,omitempty"`
 }
 
 type state struct {
 	running bool
+	cancel  context.CancelFunc
 	last    *Run
 	dropped map[string]int
 	entry   cron.EntryID
@@ -78,7 +83,7 @@ func (h *Harvester) Schedule(loc *time.Location) error {
 	for _, s := range h.sources {
 		id := s.ID
 		e, err := h.cron.AddFunc(s.Schedule, func() {
-			if err := h.Start(id, false); err != nil {
+			if err := h.StartScheduled(id); err != nil {
 				slog.Warn("scheduled harvest not started", "source", id, "err", err)
 			}
 		})
@@ -101,35 +106,74 @@ func (h *Harvester) Stop() {
 }
 
 func (h *Harvester) Start(id string, full bool) error {
-	if err := h.begin(id); err != nil {
+	ctx, err := h.begin(id)
+	if err != nil {
 		return err
 	}
-	h.wg.Go(func() { h.run(id, full) })
+	h.wg.Go(func() { h.run(ctx, id, full) })
 	return nil
 }
 
-func (h *Harvester) Run(id string, full bool) (Run, error) {
-	if err := h.begin(id); err != nil {
-		return Run{}, err
+func (h *Harvester) StartScheduled(id string) error {
+	if on, err := h.idx.Meta("suspended:" + id); err != nil || on != "" {
+		return cmp.Or(err, ErrSuspended)
 	}
-	return h.run(id, full)
+	return h.Start(id, false)
 }
 
-func (h *Harvester) begin(id string) error {
+func (h *Harvester) Run(id string, full bool) (Run, error) {
+	ctx, err := h.begin(id)
+	if err != nil {
+		return Run{}, err
+	}
+	return h.run(ctx, id, full)
+}
+
+func (h *Harvester) Cancel(id string) (bool, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	st, ok := h.state[id]
 	if !ok {
-		return ErrUnknownSource
+		return false, ErrUnknownSource
 	}
-	if st.running {
-		return ErrBusy
+	if st.cancel != nil {
+		st.cancel()
 	}
-	st.running = true
-	return nil
+	return st.running, nil
 }
 
-func (h *Harvester) run(id string, full bool) (Run, error) {
+func (h *Harvester) Suspend(id string, on bool) error {
+	if _, ok := h.state[id]; !ok {
+		return ErrUnknownSource
+	}
+	since, err := h.idx.Meta("suspended:" + id)
+	if err != nil || on == (since != "") {
+		return err
+	}
+	if on {
+		since = time.Now().UTC().Format(time.RFC3339)
+	} else {
+		since = ""
+	}
+	return h.idx.SetMeta("suspended:"+id, since)
+}
+
+func (h *Harvester) begin(id string) (context.Context, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	st, ok := h.state[id]
+	if !ok {
+		return nil, ErrUnknownSource
+	}
+	if st.running {
+		return nil, ErrBusy
+	}
+	ctx, cancel := context.WithCancel(h.ctx)
+	st.running, st.cancel = true, cancel
+	return ctx, nil
+}
+
+func (h *Harvester) run(ctx context.Context, id string, full bool) (Run, error) {
 	var src config.Source
 	for _, s := range h.sources {
 		if s.ID == id {
@@ -139,15 +183,19 @@ func (h *Harvester) run(id string, full bool) (Run, error) {
 	run := Run{Full: full, Started: time.Now()}
 	slog.Info("harvest started", "source", id, "full", full)
 	dropped := map[string]int{}
-	err := h.harvest(src, full, &run, dropped)
+	err := h.harvest(ctx, src, full, &run, dropped)
 	run.Finished = time.Now()
+	if err != nil && ctx.Err() != nil {
+		err = ErrCancelled
+	}
 	if err != nil {
 		run.Error = err.Error()
 	}
 
 	h.mu.Lock()
 	st := h.state[id]
-	st.running = false
+	st.cancel()
+	st.running, st.cancel = false, nil
 	st.last = &run
 	for k, n := range dropped {
 		st.dropped[k] += n
@@ -163,9 +211,9 @@ func (h *Harvester) run(id string, full bool) (Run, error) {
 	return run, err
 }
 
-func (h *Harvester) harvest(src config.Source, full bool, run *Run, dropped map[string]int) error {
+func (h *Harvester) harvest(ctx context.Context, src config.Source, full bool, run *Run, dropped map[string]int) error {
 	c := oai.New(src.OAIURL, h.agent)
-	sets, err := c.ListSets(h.ctx)
+	sets, err := c.ListSets(ctx)
 	if err != nil {
 		return fmt.Errorf("ListSets: %w", err)
 	}
@@ -205,7 +253,7 @@ func (h *Harvester) harvest(src config.Source, full bool, run *Run, dropped map[
 	if src.MetadataPrefix == "oai_dc" {
 		parse = record.FromOAIDC
 	}
-	date, err := c.ListRecords(h.ctx, src.MetadataPrefix, from, func(page []oai.Record) error {
+	date, err := c.ListRecords(ctx, src.MetadataPrefix, from, func(page []oai.Record) error {
 		var ups []record.Record
 		var dels []string
 		for _, r := range page {
@@ -274,9 +322,13 @@ func (h *Harvester) Status() ([]SourceStatus, error) {
 		if err != nil {
 			return nil, err
 		}
+		since, err := h.idx.Meta("suspended:" + s.ID)
+		if err != nil {
+			return nil, err
+		}
 		h.mu.Lock()
 		st := h.state[s.ID]
-		ss := SourceStatus{ID: s.ID, Name: s.Name, Docs: docs, Cursor: cur, Running: st.running, Last: st.last, Dropped: maps.Clone(st.dropped)}
+		ss := SourceStatus{ID: s.ID, Name: s.Name, Docs: docs, Cursor: cur, Suspended: since, Running: st.running, Last: st.last, Dropped: maps.Clone(st.dropped)}
 		if h.cron != nil {
 			if next := h.cron.Entry(st.entry).Next; !next.IsZero() {
 				ss.Next = &next

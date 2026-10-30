@@ -40,6 +40,9 @@ import (
 const usage = `Usage:
   dssr serve   [options]
   dssr harvest [options]
+  dssr cancel  [options]
+  dssr suspend [options]
+  dssr resume  [options]
   dssr search  [options] <query>
   dssr get     [options] <id>
   dssr status  [options]
@@ -63,6 +66,26 @@ Only one dssr serve can use the index at one time.
 
 Start a harvest now. dssr serve does the harvest in the background.
 Run dssr status to see the result.
+`,
+	"cancel": `Usage: dssr cancel [options]
+
+Stop the harvest that is running now.
+The records that dssr already read stay in the index, and the cursor does not move, so the next harvest reads them again.
+A cancelled full harvest removes no records.
+The schedule does not change; to stop the next harvests too, run dssr suspend.
+`,
+	"suspend": `Usage: dssr suspend [options]
+
+Skip the scheduled harvests and the harvest at startup until you run dssr resume.
+dssr keeps this in the index, so it stays after a restart, but dssr reindex removes it.
+A harvest that is running now continues; to stop it, run dssr cancel.
+dssr harvest still starts a harvest when you run it.
+`,
+	"resume": `Usage: dssr resume [options]
+
+Start the scheduled harvests again after dssr suspend.
+The next scheduled harvest reads every record that changed while the schedule was suspended.
+To harvest now, run dssr harvest.
 `,
 	"search": `Usage: dssr search [options] <query>
 
@@ -137,6 +160,9 @@ func main() {
 	cmds := map[string]func([]string) error{
 		"serve":     serve,
 		"harvest":   harvestCmd,
+		"cancel":    cancelCmd,
+		"suspend":   func(args []string) error { return suspendCmd("suspend", args) },
+		"resume":    func(args []string) error { return suspendCmd("resume", args) },
 		"search":    search,
 		"get":       get,
 		"status":    status,
@@ -252,7 +278,9 @@ func serve(args []string) error {
 		return err
 	}
 	for _, s := range cfg.Sources {
-		if err := h.Start(s.ID, false); err != nil {
+		if err := h.StartScheduled(s.ID); errors.Is(err, harvest.ErrSuspended) {
+			slog.Info("startup harvest skipped", "source", s.ID, "err", err)
+		} else if err != nil {
 			return err
 		}
 	}
@@ -359,6 +387,55 @@ func harvestCmd(args []string) error {
 	return nil
 }
 
+func sourceQuery(fs *flag.FlagSet, args []string) string {
+	source := fs.String("source", "", "Do this only for the source with this `ID`.\nWithout this option, dssr does it for all sources.")
+	parse(fs, args)
+	if *source == "" {
+		return ""
+	}
+	return "?" + url.Values{"source": {*source}}.Encode()
+}
+
+func cancelCmd(args []string) error {
+	fs, cfgPath := newFlags("cancel")
+	body, err := call(*cfgPath, http.MethodPost, "/cancel"+sourceQuery(fs, args))
+	if err != nil {
+		return err
+	}
+	var res struct {
+		Cancelled []string `json:"cancelled"`
+	}
+	if err := json.Unmarshal(body, &res); err != nil {
+		return err
+	}
+	if len(res.Cancelled) == 0 {
+		fmt.Println("no harvest was running")
+		return nil
+	}
+	fmt.Printf("cancelled the harvest of %s; the cursor stays where it was\n", strings.Join(res.Cancelled, ", "))
+	return nil
+}
+
+func suspendCmd(name string, args []string) error {
+	fs, cfgPath := newFlags(name)
+	body, err := call(*cfgPath, http.MethodPost, "/"+name+sourceQuery(fs, args))
+	if err != nil {
+		return err
+	}
+	var res struct {
+		Sources []string `json:"sources"`
+	}
+	if err := json.Unmarshal(body, &res); err != nil {
+		return err
+	}
+	if name == "suspend" {
+		fmt.Printf("suspended the schedule of %s; run dssr resume to start it again\n", strings.Join(res.Sources, ", "))
+	} else {
+		fmt.Printf("resumed the schedule of %s\n", strings.Join(res.Sources, ", "))
+	}
+	return nil
+}
+
 func search(args []string) error {
 	fs, cfgPath := newFlags("search")
 	var types, collections, languages multi
@@ -451,7 +528,10 @@ func status(args []string) error {
 		fmt.Printf("\n%s (%s)\n", s.ID, s.Name)
 		fmt.Printf("  documents  %d\n", s.Docs)
 		fmt.Printf("  cursor     %s\n", cmp.Or(s.Cursor, "none"))
-		if s.Next != nil {
+		if s.Suspended != "" {
+			t, _ := time.Parse(time.RFC3339, s.Suspended)
+			fmt.Printf("  suspended  since %s; run dssr resume to start the schedule again\n", ts(t))
+		} else if s.Next != nil {
 			fmt.Printf("  next run   %s\n", ts(*s.Next))
 		}
 		fmt.Printf("  running    %t\n", s.Running)

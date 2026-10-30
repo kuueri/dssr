@@ -68,6 +68,9 @@ func (s *Server) Admin() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /status", s.status)
 	mux.HandleFunc("POST /harvest", s.harvest)
+	mux.HandleFunc("POST /cancel", s.cancel)
+	mux.HandleFunc("POST /suspend", s.suspend(true))
+	mux.HandleFunc("POST /resume", s.suspend(false))
 	mux.HandleFunc("GET /search", s.search)
 	mux.HandleFunc("GET /records/{source}/{handle...}", s.record)
 	return mux
@@ -128,11 +131,47 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, Status{Version: s.version, Started: s.started, Sources: sources})
 }
 
-func (s *Server) harvest(w http.ResponseWriter, r *http.Request) {
-	ids := s.sources
+func (s *Server) targets(r *http.Request) []string {
 	if id := r.URL.Query().Get("source"); id != "" {
-		ids = []string{id}
+		return []string{id}
 	}
+	return s.sources
+}
+
+func (s *Server) cancel(w http.ResponseWriter, r *http.Request) {
+	cancelled := []string{}
+	for _, id := range s.targets(r) {
+		running, err := s.h.Cancel(id)
+		if err != nil {
+			problem(w, http.StatusNotFound, "unknown source "+id)
+			return
+		}
+		if running {
+			cancelled = append(cancelled, id)
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"cancelled": cancelled})
+}
+
+func (s *Server) suspend(on bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ids := s.targets(r)
+		for _, id := range ids {
+			switch err := s.h.Suspend(id, on); {
+			case errors.Is(err, harvest.ErrUnknownSource):
+				problem(w, http.StatusNotFound, "unknown source "+id)
+				return
+			case err != nil:
+				problem(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"sources": ids, "suspended": on})
+	}
+}
+
+func (s *Server) harvest(w http.ResponseWriter, r *http.Request) {
+	ids := s.targets(r)
 	full := r.URL.Query().Get("full") == "true"
 	for _, id := range ids {
 		switch err := s.h.Start(id, full); {
