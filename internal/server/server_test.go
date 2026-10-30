@@ -115,4 +115,17 @@ func TestAdmin(t *testing.T) {
 	if w := do(t, admin, "GET", "/records/repo/123456789/56", ""); w.Code != 200 {
 		t.Fatalf("admin record status %d", w.Code)
 	}
+	for _, target := range []string{"/cancel?source=nope", "/suspend?source=nope", "/resume?source=nope"} {
+		if w := do(t, admin, "POST", target, ""); w.Code != 404 {
+			t.Fatalf("%s status %d", target, w.Code)
+		}
+	}
+	if w := do(t, admin, "POST", "/cancel", ""); w.Code != 200 || w.Body.String() != "{\"cancelled\":[]}\n" {
+		t.Fatalf("cancel status %d: %s", w.Code, w.Body)
+	}
+	do(t, admin, "POST", "/suspend", "")
+	w = do(t, admin, "GET", "/status", "")
+	if err := json.NewDecoder(w.Body).Decode(&st); err != nil || st.Sources[0].Suspended == "" {
+		t.Fatalf("status after suspend %+v, %v", st, err)
+	}
 }

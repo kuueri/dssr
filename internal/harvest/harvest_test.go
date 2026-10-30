@@ -26,11 +26,15 @@ type fakeOAI struct {
 	recs  []fakeRec
 	empty bool
 	froms []string
+	hold  chan struct{}
 }
 
 const pageSize = 2
 
 func (f *fakeOAI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if f.hold != nil && r.URL.Query().Get("resumptionToken") != "" {
+		<-f.hold
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	q := r.URL.Query()
@@ -152,13 +156,68 @@ func TestFullSweepGuard(t *testing.T) {
 
 func TestBusyAndUnknown(t *testing.T) {
 	h, _ := setup(t, &fakeOAI{})
-	if err := h.begin("repo"); err != nil {
+	if _, err := h.begin("repo"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := h.Run("repo", false); !errors.Is(err, ErrBusy) {
 		t.Fatalf("want ErrBusy, got %v", err)
 	}
 	if err := h.Start("nope", false); !errors.Is(err, ErrUnknownSource) {
+		t.Fatalf("want ErrUnknownSource, got %v", err)
+	}
+}
+
+func TestCancelKeepsCursor(t *testing.T) {
+	f := &fakeOAI{recs: []fakeRec{{"1/1", "a", false}, {"1/2", "b", false}, {"1/3", "c", false}}}
+	h, idx := setup(t, f)
+	if err := idx.SetMeta("cursor:repo", "2026-01-01T00:00:00Z"); err != nil {
+		t.Fatal(err)
+	}
+	f.hold = make(chan struct{})
+	t.Cleanup(func() { close(f.hold) })
+	if err := h.Start("repo", false); err != nil {
+		t.Fatal(err)
+	}
+	if running, err := h.Cancel("repo"); !running || err != nil {
+		t.Fatalf("cancel running %t, %v", running, err)
+	}
+	h.Stop()
+	st, _ := h.Status()
+	if st[0].Running || st[0].Last.Error != ErrCancelled.Error() || st[0].Cursor != "2026-01-01T00:00:00Z" {
+		t.Fatalf("status after cancel %+v, last %+v", st[0], st[0].Last)
+	}
+	if running, _ := h.Cancel("repo"); running {
+		t.Fatal("cancel reports a finished harvest as running")
+	}
+	if _, err := h.Cancel("nope"); !errors.Is(err, ErrUnknownSource) {
+		t.Fatalf("want ErrUnknownSource, got %v", err)
+	}
+}
+
+func TestSuspendSkipsSchedule(t *testing.T) {
+	f := &fakeOAI{recs: []fakeRec{{"1/1", "a", false}}}
+	h, idx := setup(t, f)
+	if err := h.Suspend("repo", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.StartScheduled("repo"); !errors.Is(err, ErrSuspended) {
+		t.Fatalf("want ErrSuspended, got %v", err)
+	}
+	st, _ := h.Status()
+	if st[0].Suspended == "" {
+		t.Fatalf("status %+v", st[0])
+	}
+	if _, err := h.Run("repo", false); err != nil || count(t, idx) != 1 {
+		t.Fatalf("manual harvest while suspended: %v, count %d", err, count(t, idx))
+	}
+	if err := h.Suspend("repo", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.StartScheduled("repo"); err != nil {
+		t.Fatal(err)
+	}
+	h.Stop()
+	if err := h.Suspend("nope", true); !errors.Is(err, ErrUnknownSource) {
 		t.Fatalf("want ErrUnknownSource, got %v", err)
 	}
 }
