@@ -20,6 +20,15 @@ VuFind is a PHP portal with a user interface, Solr, ILS drivers, and a separate 
 dssr is a headless service with an embedded index, and its HTTP API is its only interface, so it has no user interface and no ILS driver layer.
 dssr works with any source and relies only on published contracts: OAI-PMH 2.0 for harvesting, `dim` and `oai_dc` mapped through a `dc` field whitelist, and OpenAPI 3.1 for the HTTP API.
 
+## Requirements
+
+| Resource | Minimum                                                                                                             |
+| -------- | ------------------------------------------------------------------------------------------------------------------- |
+| CPU      | 1 core, `x86_64` (`amd64`) only                                                                                     |
+| Memory   | 512 MB                                                                                                              |
+| Disk     | 1 GB free under `/var/lib/dssr`                                                                                     |
+| System   | Linux with systemd, plus `curl`, `awk`, `tar`, `sha256sum`, `od`, `install`, `useradd`, `usermod`, and `journalctl` |
+
 ## Install
 
 On a Linux server with systemd, run this command:
