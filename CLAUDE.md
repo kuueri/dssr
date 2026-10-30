@@ -51,6 +51,9 @@ Each document stores the full record as JSON in the unindexed field `record`, an
 - The whitelist keeps only the `dc` schema and drops `dc.description.provenance` (staff names and e-mail addresses) and every non-`dc` schema (may hold student numbers). `oai_dc` (the default prefix) has no qualifiers, so the whitelist cannot drop provenance from it and relies on the source crosswalk to leave it out, as the stock DSpace 6.3 `oai_dc.xsl` does. Every unqualified `dc:description` maps to `abstract`, because only `abstract` is searched. `dssr status` counts dropped fields, and that count is how the whitelist grows.
 - Results carry the full record because clients pass them to AI agents as context.
 - Search weights, fuzzy settings, and stemming change only on evidence from `dssr eval`.
+- The Indonesian stop list is Bleve's list minus `contentWords` (nouns, adjectives, time words, negation), because Bleve and Lucene drop words such as `dini`, `diri`, and `kecil`.
+- The whole-query title boost searches `title_phrase`, whose analyzer closes the gaps that stop words leave, so a quoted phrase on `title` stays exact.
+- Search passes the BM25 statistics that `refreshStats` computes after every write, because Bleve derives the average field length from per-segment dictionary sizes, which change when segments merge.
 
 ## Adding a mapped field
 
