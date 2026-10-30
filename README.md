@@ -125,6 +125,9 @@ dssr harvest --full
 | `dssr search <query>`                 | Search with the same logic as the HTTP API                                 |
 | `dssr get <id>`                       | Show one record                                                            |
 | `dssr harvest [--source ID] [--full]` | Start a harvest now                                                        |
+| `dssr cancel [--source ID]`           | Stop the running harvest; the cursor stays where it was                    |
+| `dssr suspend [--source ID]`          | Skip the scheduled and startup harvests until `dssr resume`                |
+| `dssr resume [--source ID]`           | Start the schedule again                                                   |
 | `dssr eval <file>`                    | Measure search relevance with a list of queries                            |
 
 Run `dssr <command> --help` to see the options of a command.
