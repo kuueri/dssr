@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.9] - 2026-10-30
+
+### Fixed
+
+- Search no longer ignores Indonesian content words that the stop list held, such as `dini`, `diri`, `kecil`, `lama`, `lalu`, and `tidak`, so `konsep diri` no longer returns the same results as `konsep`.
+- A record whose title holds the query words in order ranks higher even when the title or the query has a stop word between them, for example `putusan hakim perkara pidana` for "Putusan hakim dalam perkara pidana". Quoted phrases still match only adjacent words.
+- Quoted phrases now match in creators, contributors, and subjects, not only in titles and abstracts.
+- Scores no longer change when the index merges its segments, and results with equal scores come in record ID order.
+
+This release changes the index. Run `sudo dssr update` and then `sudo dssr reindex`.
+
 ## [0.0.8] - 2026-10-30
 
 ### Added
@@ -93,6 +104,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `install.sh` to install or upgrade dssr as a systemd service from a GitHub release.
 - Release archives for linux/amd64 and linux/arm64 with SHA-256 checksums and the licenses of all dependencies.
 
+[0.0.9]: https://github.com/kuueri/dssr/compare/0.0.8...0.0.9
 [0.0.8]: https://github.com/kuueri/dssr/compare/0.0.7...0.0.8
 [0.0.7]: https://github.com/kuueri/dssr/compare/0.0.6...0.0.7
 [0.0.6]: https://github.com/kuueri/dssr/compare/0.0.5...0.0.6
