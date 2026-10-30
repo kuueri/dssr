@@ -1,29 +1,37 @@
 # Project
 
 dssr is a discovery backend for any OAI-PMH data provider, built first for a university library.
-It harvests metadata over OAI-PMH, keeps its own Bleve search index, and serves search over an HTTP API, so client services never touch the source systems.
+It harvests metadata over OAI-PMH, keeps its own tantivy search index, and serves search over an HTTP API, so client services never touch the source systems.
 
 ## Relationship to VuFind
 
 The problem statement comes from VuFind (<https://github.com/vufind-org/vufind>): pull records into a local search index, then answer discovery queries without querying the source per request.
 
-The approach differs, and it is platform-agnostic. VuFind is a PHP portal with a UI, Solr, ILS drivers, and a separate OAI-PMH harvester; dssr is a headless Go backend with an embedded Bleve index and an HTTP API as its only interface. Any source that exposes OAI-PMH with the mapped metadata prefix can be harvested; there is no UI and no ILS driver layer.
+The approach differs, and it is platform-agnostic. VuFind is a PHP portal with a UI, Solr, ILS drivers, and a separate OAI-PMH harvester; dssr is a headless Rust backend with an embedded tantivy index and an HTTP API as its only interface. Any source that exposes OAI-PMH with the mapped metadata prefix can be harvested; there is no UI and no ILS driver layer.
 
 Interoperability rests on published contracts: OAI-PMH 2.0 for harvesting, the `dim` and `oai_dc` prefixes as the only mapped payloads (whitelisted to `dc` fields), and OpenAPI 3.1 for the HTTP API. dssr is not a VuFind replacement.
 
 ## Workflow guardrails
 
-Never run `go build`, `go test`, `go fmt`, `git add`, or `git commit`.
+Never run `cargo build`, `cargo test`, `cargo fmt`, `git add`, or `git commit`.
 End each code change with the exact command for the user to run instead:
 
 ```bash
-go test -race ./...
-CGO_ENABLED=0 go build -trimpath -o dssr ./cmd/dssr
-gofmt -l .
+cargo fmt --check
+cargo clippy --all-targets -- -D warnings
+cargo test
+cargo build --release
 shellcheck install.sh scripts/package.sh
 ```
 
 Run read-only commands in their non-interactive form, because a pager blocks the session: `git --no-pager diff`, `git --no-pager log`, `journalctl --no-pager`, `systemctl --no-pager status`.
+
+## Toolchain
+
+dssr compiles on stable `rustc` only.
+Never add `#![feature(...)]`, `cargo +nightly`, or any unstable language or library feature.
+`Cargo.toml` uses `edition = "2024"`, and `rust-version` holds the minimum stable release that builds the crate with its dependencies; raise it when a change needs a newer stable feature.
+An `if let` guard in a match arm is unstable before 1.94, so write a plain guard and an `if let` inside the arm body; `let` chains in `if` and `while` are stable since 1.88.
 
 ## Scope
 
@@ -31,44 +39,46 @@ dssr is pull-only: it reaches each source only through the source's OAI-PMH endp
 
 ## Architecture
 
-`dssr serve` is the single owner of the Bleve index, because bbolt holds an exclusive file lock.
-Every subcommand except `update`, `reindex`, `revoke`, and `uninstall` is an HTTP client of the admin unix socket (`call` in `cmd/dssr/main.go`), so it needs a running `serve`.
-Members of the group `dssr` reach the socket without `sudo`, because `listenUnix` sets mode 0660 and the unit sets `RuntimeDirectoryMode=0750`.
+`dssr serve` is the single owner of the index, because the tantivy writer holds an exclusive lock file in `index_path/tantivy`.
+Every subcommand except `update`, `reindex`, `revoke`, and `uninstall` is an HTTP client of the admin unix socket (`call` in `src/main.rs`), so it needs a running `serve`.
+Members of the group `dssr` reach the socket without `sudo`, because `listen_unix` sets mode 0660 and the unit sets `RuntimeDirectoryMode=0750`.
 `dssr update` runs `install.sh` from the tag of the latest release, or of `DSSR_VERSION` when the operator sets it, with `DSSR_VERSION` set, never from `main`, so the installer matches the release files.
 `dssr reindex` stops the service, deletes the index directory, and starts the service, whose startup harvest then reads every record because the cursor went with the index.
 `dssr revoke` writes the hash of a new `sk-` token for the client `default` to the configuration and shows the token before it restarts the service, which revokes the previous token.
 `dssr uninstall` stops the service and removes the installation from the host.
 These run as root and do not contact `serve`.
 
-A harvest flows through `harvest` (schedule), `oai` (`ListRecords` paging), `record` (`dim` or `oai_dc` whitelist mapping), and `index` (Bleve documents).
-Each document stores the full record as JSON in the unindexed field `record`, and search results and record lookups return that JSON.
+A harvest flows through `harvest` (schedule), `oai` (`ListRecords` paging), `record` (`dim` or `oai_dc` whitelist mapping), and `index` (tantivy documents).
+Each document stores the full record as JSON in the stored field `record`, and search results and record lookups return that JSON.
+`index_path` holds `tantivy/` and `state.json`, which keeps the cursor, generation, and suspension of each source.
+Releases ship only `linux/amd64`, as a static `x86_64-unknown-linux-musl` binary.
 
 ## Invariants
 
 - The incremental `from` is the cursor minus 24 hours, because a DSpace datestamp is the change time, not the time the record reached the OAI core. It is sent as a date without a time, because SLiMS rejects a time in `from` although its `Identify` declares seconds, and OAI-PMH requires every repository to accept a date. The cursor advances only after a successful run.
 - A full harvest is mark-and-sweep by generation. The sweep is skipped when the run fails or sees fewer than 90% of the indexed records, because DSpace answers `noRecordsMatch` when its OAI core is empty or Solr fails.
-- Bleve persists its index mapping at creation, so a change to `newMapping` or the analyzer requires `sudo dssr reindex`, while a change to the `record` mapping requires `dssr harvest --full`.
+- tantivy stores the schema in `meta.json` and refuses to open an index with a different one, and it indexes with the analyzer of the release that wrote each document, so a change to `schema` in `src/index/mod.rs` or to the analyzer requires `sudo dssr reindex`, while a change to the `record` mapping requires `dssr harvest --full`.
 - The whitelist keeps only the `dc` schema and drops `dc.description.provenance` (staff names and e-mail addresses) and every non-`dc` schema (may hold student numbers). `oai_dc` (the default prefix) has no qualifiers, so the whitelist cannot drop provenance from it and relies on the source crosswalk to leave it out, as the stock DSpace 6.3 `oai_dc.xsl` does. Every unqualified `dc:description` maps to `abstract`, because only `abstract` is searched. `dssr status` counts dropped fields, and that count is how the whitelist grows.
 - Results carry the full record because clients pass them to AI agents as context.
 - Search weights, fuzzy settings, and stemming change only on evidence from `dssr eval`.
-- The Indonesian stop list is Bleve's list minus `contentWords` (nouns, adjectives, time words, negation), because Bleve and Lucene drop words such as `dini`, `diri`, and `kecil`.
+- Scoring reproduces Bleve 2.6.1 in `src/index/node.rs` and `src/index/search.rs`, because the weights were tuned on Bleve: BM25 with the square root of the term frequency, idf squared, and the average field length rounded up from the summed term document frequencies; a coordination factor on every disjunction; and fuzzy distance 1 with transpositions, each candidate weighted by 1/(1+distance).
+- The Indonesian stop list is Bleve's list in `src/index/stop_words_id.txt` minus `CONTENT_WORDS` (nouns, adjectives, time words, negation), because Bleve and Lucene drop words such as `dini`, `diri`, and `kecil`.
 - The whole-query title boost searches `title_phrase`, whose analyzer closes the gaps that stop words leave, so a quoted phrase on `title` stays exact.
-- Search passes the BM25 statistics that `refreshStats` computes after every write, because Bleve derives the average field length from per-segment dictionary sizes, which change when segments merge.
 
 ## Adding a mapped field
 
 A field is mapped when these five places agree:
 
-1. the `Record` struct in `internal/record/record.go`,
-2. the `add` switch in the same file,
-3. the fixture `internal/record/testdata/dim.xml`, and `oai_dc.xml` when `oai_dc` carries the field,
-4. the expected records in `internal/record/record_test.go`,
-5. the `Record` schema in `internal/server/openapi.json`.
+1. the `Record` struct in `src/record.rs`,
+2. the `add` match in the same file,
+3. the fixture `testdata/record/dim.xml`, and `oai_dc.xml` when `oai_dc` carries the field,
+4. the expected records in the tests of `src/record.rs`,
+5. the `Record` schema in `src/openapi.json`.
 
 ## Release
 
 Tags are bare SemVer (`0.2.0`), and only the GitHub release title carries the `v` (`v0.2.0`).
-Go's VCS stamping ignores tags without `v`, so `scripts/package.sh` sets the version through `-ldflags "-X main.buildVersion=<tag>"`.
+`scripts/package.sh` sets the version through `DSSR_BUILD_VERSION=<tag>` at build time, which `version` in `src/main.rs` reads.
 Asset names carry no version because `install.sh` downloads from `releases/latest/download/<name>`.
 
 `CHANGELOG.md` changes only in a release commit.

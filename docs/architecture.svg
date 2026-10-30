@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg viewBox="0 0 880 424" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="architecture-title architecture-desc" id="architecture-root">
   <title id="architecture-title">How dssr works</title>
-  <desc id="architecture-desc">dssr serve pulls records from OAI-PMH data providers on a cron schedule, maps them through a dc field whitelist into its Bleve index, and answers client services over the HTTP API and the dssr CLI over the admin socket.</desc>
+  <desc id="architecture-desc">dssr serve pulls records from OAI-PMH data providers on a cron schedule, maps them through a dc field whitelist into its tantivy index, and answers client services over the HTTP API and the dssr CLI over the admin socket.</desc>
   <defs>
     <style>
       #architecture-root .name { font-family: "Geist", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 12px; font-weight: 600; fill: #eaf2ff; }
@@ -92,6 +92,6 @@
   <rect x="664" y="184" width="152" height="64" rx="6" fill="#5ab0ff" fill-opacity="0.10" stroke="#5ab0ff" stroke-width="1.2"/>
   <rect x="672" y="192" width="32" height="12" rx="2" fill="none" stroke="#5ab0ff" stroke-opacity="0.50" stroke-width="0.8"/>
   <text class="tag" x="688" y="201" text-anchor="middle" style="fill: #5ab0ff">INDEX</text>
-  <text class="name" x="740" y="220" text-anchor="middle">Bleve index</text>
+  <text class="name" x="740" y="220" text-anchor="middle">tantivy index</text>
   <text class="sub" x="740" y="236" text-anchor="middle">full record as JSON</text>
 </svg>

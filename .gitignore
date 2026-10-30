@@ -1,6 +1,6 @@
-/dssr
 /dssr.yaml
 /.env
 /data/
 /dist/
 *.sock
+/target/

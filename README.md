@@ -7,7 +7,7 @@ dssr maps two metadata formats: `oai_dc`, which every OAI-PMH data provider supp
 `oai_dc` is the default.
 `dim` gives more detail for DSpace, for example the role of each contributor.
 
-![dssr serve harvests records from each data provider over OAI-PMH, maps them through a dc field whitelist into its Bleve index, and serves client services over the HTTP API and the dssr CLI over the admin socket](docs/architecture.svg)
+![dssr serve harvests records from each data provider over OAI-PMH, maps them through a dc field whitelist into its tantivy index, and serves client services over the HTTP API and the dssr CLI over the admin socket](docs/architecture.svg)
 
 > [!WARNING]
 > dssr is experimental. Do not use it in production. The API, configuration, and index format may change without notice.
@@ -22,7 +22,7 @@ curl -fsSL https://kuueri.com/dssr/install.sh | sudo bash
 
 The script does these steps:
 
-1. It downloads the latest release for `amd64` or `arm64` and checks the SHA-256 checksum.
+1. It downloads the latest release for `amd64` and checks the SHA-256 checksum.
 2. It installs `/usr/local/bin/dssr` and the systemd service `dssr`.
 3. It makes the system user `dssr` and adds the user that runs `sudo` to the group `dssr`.
 4. If `/etc/dssr/dssr.yaml` does not exist, it writes the file with a new client token and an example source in comments.
@@ -152,16 +152,18 @@ curl -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:8080/v1/search?q=wisata
 - A full harvest does not delete old records if it sees fewer than 90% of the indexed records. This guard keeps the index if the source fails.
 - For a source whose OAI-PMH datestamp does not change when a record changes, for example SLiMS, an incremental harvest finds only new records. Run `dssr harvest --full` to get the changes.
 - After a change to `metadata_prefix`, run `dssr harvest --full --source ID`, because the index keeps the records of the old format until each record is harvested again.
-- `dssr status` shows the fields that dssr dropped. Use this list to extend the field mapping in `internal/record`.
-- The index keeps the analyzer and the index mapping from the time dssr made it. After a change to `internal/index`, run `sudo dssr reindex`.
+- `dssr status` shows the fields that dssr dropped. Use this list to extend the field mapping in `src/record.rs`.
+- The index keeps the schema and the analyzer from the time dssr made it. After a change to `src/index`, run `sudo dssr reindex`.
 
 ## Build from source
 
-With Go 1.27.3 or later:
+With stable Rust 1.90 or later:
 
 ```bash
-CGO_ENABLED=0 go build -trimpath -o dssr ./cmd/dssr
+cargo build --release
 ```
+
+The binary is `target/release/dssr`.
 
 ## License
 

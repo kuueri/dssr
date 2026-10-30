@@ -24,10 +24,9 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
+      - run: rustup toolchain install stable --profile minimal --target x86_64-unknown-linux-musl && rustup default stable
+      - run: sudo apt-get install -y musl-tools
       - run: bash scripts/package.sh "$GITHUB_REF_NAME"
-      - run: gh release create "$GITHUB_REF_NAME" dist/dssr_linux_*.tar.gz dist/checksums.txt install.sh --title "v$GITHUB_REF_NAME" --notes-file dist/notes.md --generate-notes --verify-tag
+      - run: gh release create "$GITHUB_REF_NAME" dist/dssr_linux_amd64.tar.gz dist/checksums.txt install.sh --title "v$GITHUB_REF_NAME" --notes-file dist/notes.md --generate-notes --verify-tag
         env:
           GH_TOKEN: ${{ github.token }}

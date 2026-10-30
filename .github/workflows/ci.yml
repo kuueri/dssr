@@ -3,23 +3,21 @@ on:
   push:
     branches: [main]
     paths:
-      - "**/*.go"
-      - "**/testdata/**"
+      - "src/**"
+      - "testdata/**"
       - install.sh
       - "scripts/**"
-      - internal/server/openapi.json
-      - go.mod
-      - go.sum
+      - Cargo.toml
+      - Cargo.lock
       - .github/workflows/ci.yml
   pull_request:
     paths:
-      - "**/*.go"
-      - "**/testdata/**"
+      - "src/**"
+      - "testdata/**"
       - install.sh
       - "scripts/**"
-      - internal/server/openapi.json
-      - go.mod
-      - go.sum
+      - Cargo.toml
+      - Cargo.lock
       - .github/workflows/ci.yml
   workflow_call:
 permissions:
@@ -29,9 +27,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-      - run: go vet ./...
-      - run: go test -race ./...
+      - run: rustup toolchain install stable --profile minimal --component rustfmt,clippy && rustup default stable
+      - run: cargo fmt --check
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: cargo test --locked
       - run: shellcheck install.sh scripts/package.sh
