@@ -2,14 +2,7 @@
 
 dssr is a discovery backend for any OAI-PMH data provider, built first for a university library.
 It harvests metadata over OAI-PMH, keeps its own tantivy search index, and serves search over an HTTP API, so client services never touch the source systems.
-
-## Relationship to VuFind
-
-The problem statement comes from VuFind (<https://github.com/vufind-org/vufind>): pull records into a local search index, then answer discovery queries without querying the source per request.
-
-The approach differs, and it is platform-agnostic. VuFind is a PHP portal with a UI, Solr, ILS drivers, and a separate OAI-PMH harvester; dssr is a headless Rust backend with an embedded tantivy index and an HTTP API as its only interface. Any source that exposes OAI-PMH with the mapped metadata prefix can be harvested; there is no UI and no ILS driver layer.
-
-Interoperability rests on published contracts: OAI-PMH 2.0 for harvesting, the `dim` and `oai_dc` prefixes as the only mapped payloads (whitelisted to `dc` fields), and OpenAPI 3.1 for the HTTP API. dssr is not a VuFind replacement.
+The README states how dssr relates to VuFind and which contracts it follows.
 
 ## Workflow guardrails
 
@@ -48,9 +41,10 @@ Members of the group `dssr` reach the socket without `sudo`, because `listen_uni
 `dssr uninstall` stops the service and removes the installation from the host.
 These run as root and do not contact `serve`.
 
-A harvest flows through `harvest` (schedule), `oai` (`ListRecords` paging), `record` (`dim` or `oai_dc` whitelist mapping), and `index` (tantivy documents).
+A harvest flows through `src/harvest.rs` (schedule), `src/oai.rs` (`ListRecords` paging), `src/record.rs` (`dim` or `oai_dc` whitelist mapping), and `src/index/` (tantivy documents); `src/server.rs` serves the HTTP API and the admin socket.
 Each document stores the full record as JSON in the stored field `record`, and search results and record lookups return that JSON.
 `index_path` holds `tantivy/` and `state.json`, which keeps the cursor, generation, and suspension of each source.
+`serve` refuses an `index_path` that holds `index_meta.json`, the index of a release before 0.1.0, and asks for `sudo dssr reindex`, which recognizes that file too.
 Releases ship only `linux/amd64`, as a static `x86_64-unknown-linux-musl` binary.
 
 ## Invariants
@@ -61,8 +55,8 @@ Releases ship only `linux/amd64`, as a static `x86_64-unknown-linux-musl` binary
 - The whitelist keeps only the `dc` schema and drops `dc.description.provenance` (staff names and e-mail addresses) and every non-`dc` schema (may hold student numbers). `oai_dc` (the default prefix) has no qualifiers, so the whitelist cannot drop provenance from it and relies on the source crosswalk to leave it out, as the stock DSpace 6.3 `oai_dc.xsl` does. Every unqualified `dc:description` maps to `abstract`, because only `abstract` is searched. `dssr status` counts dropped fields, and that count is how the whitelist grows.
 - Results carry the full record because clients pass them to AI agents as context.
 - Search weights, fuzzy settings, and stemming change only on evidence from `dssr eval`.
-- Scoring reproduces Bleve 2.6.1 in `src/index/node.rs` and `src/index/search.rs`, because the weights were tuned on Bleve: BM25 with the square root of the term frequency, idf squared, and the average field length rounded up from the summed term document frequencies; a coordination factor on every disjunction; and fuzzy distance 1 with transpositions, each candidate weighted by 1/(1+distance).
-- The Indonesian stop list is Bleve's list in `src/index/stop_words_id.txt` minus `CONTENT_WORDS` (nouns, adjectives, time words, negation), because Bleve and Lucene drop words such as `dini`, `diri`, and `kecil`.
+- The scoring model in `src/index/node.rs` and `src/index/search.rs` is the one the weights were tuned with, so it changes only on evidence from `dssr eval`: BM25 with the square root of the term frequency, idf squared, and the average field length rounded up from the summed term document frequencies; a coordination factor on every disjunction; and fuzzy distance 1 with transpositions, each candidate weighted by 1/(1+distance). tantivy's own `TermQuery` and `FuzzyTermQuery` score differently, so search does not use them.
+- The Indonesian stop list is the Lucene list in `src/index/stop_words_id.txt` minus `CONTENT_WORDS` (nouns, adjectives, time words, negation), because the stock list drops words such as `dini`, `diri`, and `kecil`.
 - The whole-query title boost searches `title_phrase`, whose analyzer closes the gaps that stop words leave, so a quoted phrase on `title` stays exact.
 
 ## Adding a mapped field

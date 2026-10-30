@@ -12,6 +12,14 @@ dssr maps two metadata formats: `oai_dc`, which every OAI-PMH data provider supp
 > [!WARNING]
 > dssr is experimental. Do not use it in production. The API, configuration, and index format may change without notice.
 
+## Relationship to VuFind
+
+dssr solves the problem that [VuFind](https://github.com/vufind-org/vufind) solves: pull records into a local search index, then answer discovery queries without asking the source on each request.
+It is not a VuFind replacement.
+VuFind is a PHP portal with a user interface, Solr, ILS drivers, and a separate OAI-PMH harvester.
+dssr is a headless service with an embedded index, and its HTTP API is its only interface, so it has no user interface and no ILS driver layer.
+dssr works with any source and relies only on published contracts: OAI-PMH 2.0 for harvesting, `dim` and `oai_dc` mapped through a `dc` field whitelist, and OpenAPI 3.1 for the HTTP API.
+
 ## Install
 
 On a Linux server with systemd, run this command:
@@ -155,15 +163,38 @@ curl -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:8080/v1/search?q=wisata
 - `dssr status` shows the fields that dssr dropped. Use this list to extend the field mapping in `src/record.rs`.
 - The index keeps the schema and the analyzer from the time dssr made it. After a change to `src/index`, run `sudo dssr reindex`.
 
-## Build from source
+## Development
 
-With stable Rust 1.90 or later:
+dssr builds and runs on Linux.
+
+| Requirement                                                           | Needed for                                                       |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Stable Rust 1.90 or later through rustup, with `rustfmt` and `clippy` | Building, testing, and linting; nightly features are not allowed |
+| `shellcheck`                                                          | Checking `install.sh` and `scripts/package.sh`                   |
+| The rustup target `x86_64-unknown-linux-musl`                         | The static release binary                                        |
+| `musl-gcc` (Fedora `musl-gcc`, Debian and Ubuntu `musl-tools`)        | Compiling the C code of `ring` for the release binary            |
+| `jq`                                                                  | Collecting the dependency licenses in `scripts/package.sh`       |
+
+The tests start their own OAI-PMH and HTTP servers on `127.0.0.1` and need no network access.
+Run every check before a change is done:
+
+```bash
+cargo fmt --check
+cargo clippy --all-targets -- -D warnings
+cargo test
+shellcheck install.sh scripts/package.sh
+```
+
+To run dssr locally, copy `dssr.example.yaml` to `dssr.yaml`, set a source, and start it:
 
 ```bash
 cargo build --release
+target/release/dssr serve --config dssr.yaml
+target/release/dssr status --config dssr.yaml
 ```
 
-The binary is `target/release/dssr`.
+`dssr.yaml`, the index under `data/`, and the socket stay out of git.
+`bash scripts/package.sh X.Y.Z` builds the release archive in `dist/`, and it needs a `CHANGELOG.md` section for `X.Y.Z`.
 
 ## License
 

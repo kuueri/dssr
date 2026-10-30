@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg viewBox="0 0 880 424" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="architecture-title architecture-desc" id="architecture-root">
   <title id="architecture-title">How dssr works</title>
-  <desc id="architecture-desc">dssr serve pulls records from OAI-PMH data providers on a cron schedule, maps them through a dc field whitelist into its tantivy index, and answers client services over the HTTP API and the dssr CLI over the admin socket.</desc>
+  <desc id="architecture-desc">dssr serve pulls records from OAI-PMH data providers on a cron schedule, maps them through a dc field whitelist into its tantivy index, keeps the harvest cursor of each source in state.json beside the index, and answers client services over the HTTP API and the dssr CLI over the admin socket.</desc>
   <defs>
     <style>
       #architecture-root .name { font-family: "Geist", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 12px; font-weight: 600; fill: #eaf2ff; }
@@ -21,12 +21,12 @@
 
   <line x1="176" y1="104" x2="256" y2="104" stroke="#a9bfe0" stroke-width="1.2" marker-end="url(#architecture-arrow)"/>
   <line x1="408" y1="104" x2="456" y2="104" stroke="#a9bfe0" stroke-width="1.2" marker-end="url(#architecture-arrow)"/>
-  <path d="M 608,104 H 732 Q 740,104 740,112 V 184" fill="none" stroke="#a9bfe0" stroke-width="1.2" marker-end="url(#architecture-arrow)"/>
+  <path d="M 608,104 H 732 Q 740,104 740,112 V 176" fill="none" stroke="#a9bfe0" stroke-width="1.2" marker-end="url(#architecture-arrow)"/>
   <line x1="176" y1="216" x2="256" y2="216" stroke="#a9bfe0" stroke-width="1.2" marker-end="url(#architecture-arrow)"/>
   <line x1="332" y1="184" x2="332" y2="136" stroke="#a9bfe0" stroke-width="1.2" marker-end="url(#architecture-arrow)"/>
   <line x1="408" y1="216" x2="664" y2="216" stroke="#a9bfe0" stroke-width="1.2" marker-end="url(#architecture-arrow)"/>
   <line x1="176" y1="328" x2="256" y2="328" stroke="#a9bfe0" stroke-width="1.2" marker-end="url(#architecture-arrow)"/>
-  <path d="M 408,328 H 732 Q 740,328 740,320 V 248" fill="none" stroke="#a9bfe0" stroke-width="1.2" marker-end="url(#architecture-arrow)"/>
+  <path d="M 408,328 H 732 Q 740,328 740,320 V 256" fill="none" stroke="#a9bfe0" stroke-width="1.2" marker-end="url(#architecture-arrow)"/>
 
   <rect x="192" y="84" width="48" height="12" rx="2" fill="#0a224d"/>
   <text class="label" x="216" y="93" text-anchor="middle">OAI-PMH</text>
@@ -88,10 +88,11 @@
   <text class="name" x="332" y="332" text-anchor="middle">HTTP API</text>
   <text class="sub" x="332" y="348" text-anchor="middle">127.0.0.1:8080</text>
 
-  <rect x="664" y="184" width="152" height="64" rx="6" fill="#0a224d"/>
-  <rect x="664" y="184" width="152" height="64" rx="6" fill="#5ab0ff" fill-opacity="0.10" stroke="#5ab0ff" stroke-width="1.2"/>
-  <rect x="672" y="192" width="32" height="12" rx="2" fill="none" stroke="#5ab0ff" stroke-opacity="0.50" stroke-width="0.8"/>
-  <text class="tag" x="688" y="201" text-anchor="middle" style="fill: #5ab0ff">INDEX</text>
-  <text class="name" x="740" y="220" text-anchor="middle">tantivy index</text>
-  <text class="sub" x="740" y="236" text-anchor="middle">full record as JSON</text>
+  <rect x="664" y="176" width="152" height="80" rx="6" fill="#0a224d"/>
+  <rect x="664" y="176" width="152" height="80" rx="6" fill="#5ab0ff" fill-opacity="0.10" stroke="#5ab0ff" stroke-width="1.2"/>
+  <rect x="672" y="184" width="32" height="12" rx="2" fill="none" stroke="#5ab0ff" stroke-opacity="0.50" stroke-width="0.8"/>
+  <text class="tag" x="688" y="193" text-anchor="middle" style="fill: #5ab0ff">INDEX</text>
+  <text class="name" x="740" y="212" text-anchor="middle">tantivy index</text>
+  <text class="sub" x="740" y="228" text-anchor="middle">full record as JSON</text>
+  <text class="sub" x="740" y="242" text-anchor="middle">cursor · state.json</text>
 </svg>
