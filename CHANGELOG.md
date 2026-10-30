@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.8] - 2026-10-30
+
+### Added
+
+- `dssr cancel [--source ID]` stops the harvest that is running now. The records it already read stay in the index, the cursor does not move, and a cancelled full harvest removes no records.
+- `dssr suspend [--source ID]` skips the scheduled harvests and the harvest at startup until `dssr resume [--source ID]`. The suspension stays after a restart, `dssr status` shows since when, and `dssr harvest` still starts a harvest by hand. `sudo dssr reindex` removes the suspension.
+- `dssr eval` shows the total result count and the expected record IDs for each query that misses.
+
+### Changed
+
+- A query of four or more words also finds records that match three quarters of the words, rounded down, so filler words such as `cari` or `buku` no longer hide the right record. Records that match every word still rank first, and quoted phrases must still match. For these queries `total` and the facets can grow. The existing index needs no reindex.
+
 ## [0.0.7] - 2026-10-27
 
 ### Added
@@ -81,6 +93,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `install.sh` to install or upgrade dssr as a systemd service from a GitHub release.
 - Release archives for linux/amd64 and linux/arm64 with SHA-256 checksums and the licenses of all dependencies.
 
+[0.0.8]: https://github.com/kuueri/dssr/compare/0.0.7...0.0.8
 [0.0.7]: https://github.com/kuueri/dssr/compare/0.0.6...0.0.7
 [0.0.6]: https://github.com/kuueri/dssr/compare/0.0.5...0.0.6
 [0.0.5]: https://github.com/kuueri/dssr/compare/0.0.4...0.0.5
