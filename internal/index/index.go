@@ -1,27 +1,68 @@
 package index
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
+	"slices"
+	"sync"
+	"sync/atomic"
 
 	"github.com/blevesearch/bleve/v2"
+	"github.com/blevesearch/bleve/v2/analysis"
 	"github.com/blevesearch/bleve/v2/analysis/analyzer/custom"
 	"github.com/blevesearch/bleve/v2/analysis/lang/en"
 	"github.com/blevesearch/bleve/v2/analysis/lang/id"
 	"github.com/blevesearch/bleve/v2/analysis/token/lowercase"
+	"github.com/blevesearch/bleve/v2/analysis/token/stop"
 	"github.com/blevesearch/bleve/v2/analysis/token/unicodenorm"
 	"github.com/blevesearch/bleve/v2/analysis/tokenizer/unicode"
+	"github.com/blevesearch/bleve/v2/analysis/tokenmap"
 	"github.com/blevesearch/bleve/v2/mapping"
+	"github.com/blevesearch/bleve/v2/registry"
+	"github.com/blevesearch/bleve/v2/search"
 	"github.com/blevesearch/bleve/v2/search/query"
 	bleveindex "github.com/blevesearch/bleve_index_api"
 
 	"github.com/kuueri/dssr/internal/record"
 )
 
-const analyzer = "dssr"
+const (
+	analyzer       = "dssr"
+	phraseAnalyzer = "dssr_phrase"
+)
+
+var contentWords = []string{
+	"banyak", "bermacam", "bersama", "biasa", "bukan", "dahulu", "dekat", "depan", "dini", "diri", "dirinya",
+	"dulu", "hal", "ibarat", "kecil", "kini", "lain", "lainnya", "lalu", "lama", "lamanya", "macam", "mampu",
+	"nanti", "pantas", "percuma", "saat", "saatnya", "sama", "sedikit", "sekarang", "sekitar", "sela",
+	"sendiri", "sendirinya", "serupa", "sesama", "tadi", "tak", "tanpa", "tertentu", "tidak",
+}
+
+const gapless = "dssr_gapless"
+
+func init() {
+	err := registry.RegisterTokenFilter(gapless, func(map[string]any, *registry.Cache) (analysis.TokenFilter, error) {
+		return gaplessFilter{}, nil
+	})
+	if err != nil {
+		panic(err)
+	}
+}
+
+type gaplessFilter struct{}
+
+func (gaplessFilter) Filter(input analysis.TokenStream) analysis.TokenStream {
+	for i, t := range input {
+		t.Position = i + 1
+	}
+	return input
+}
 
 type Index struct {
-	b bleve.Index
+	b     bleve.Index
+	mu    sync.Mutex
+	stats atomic.Pointer[search.BM25Stats]
 }
 
 func Open(path string) (*Index, error) {
@@ -35,7 +76,62 @@ func Open(path string) (*Index, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Index{b: b}, nil
+	x := &Index{b: b}
+	if err := x.refreshStats(); err != nil {
+		b.Close()
+		return nil, err
+	}
+	return x, nil
+}
+
+func (x *Index) refreshStats() error {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	adv, err := x.b.Advanced()
+	if err != nil {
+		return err
+	}
+	r, err := adv.Reader()
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+	n, err := r.DocCount()
+	if err != nil {
+		return err
+	}
+	st := &search.BM25Stats{DocCount: float64(n), FieldCardinality: map[string]int{"*": 0}}
+	for path, dm := range x.b.Mapping().(*mapping.IndexMappingImpl).DefaultMapping.Properties {
+		for _, f := range dm.Fields {
+			st.FieldCardinality[cmp.Or(f.Name, path)] = 0
+		}
+	}
+	fields, err := r.Fields()
+	if err != nil {
+		return err
+	}
+	for _, f := range fields {
+		d, err := r.FieldDict(f)
+		if err != nil {
+			return err
+		}
+		total := 0
+		for {
+			e, err := d.Next()
+			if err != nil {
+				d.Close()
+				return err
+			}
+			if e == nil {
+				break
+			}
+			total += int(e.Count)
+		}
+		d.Close()
+		st.FieldCardinality[f] = total
+	}
+	x.stats.Store(st)
+	return nil
 }
 
 func (x *Index) Close() error { return x.b.Close() }
@@ -49,10 +145,34 @@ func newMapping() (*mapping.IndexMappingImpl, error) {
 	}); err != nil {
 		return nil, err
 	}
+	words := analysis.NewTokenMap()
+	if err := words.LoadBytes(id.IndonesianStopWords); err != nil {
+		return nil, err
+	}
+	var tokens []any
+	for w := range words {
+		if !slices.Contains(contentWords, w) {
+			tokens = append(tokens, w)
+		}
+	}
+	if err := m.AddCustomTokenMap("id_function_words", map[string]any{"type": tokenmap.Name, "tokens": tokens}); err != nil {
+		return nil, err
+	}
+	if err := m.AddCustomTokenFilter("stop_id_function", map[string]any{"type": stop.Name, "stop_token_map": "id_function_words"}); err != nil {
+		return nil, err
+	}
+	filters := []string{"nfkc", lowercase.Name, en.StopName, "stop_id_function", stemmer}
 	if err := m.AddCustomAnalyzer(analyzer, map[string]any{
 		"type":          custom.Name,
 		"tokenizer":     unicode.Name,
-		"token_filters": []string{"nfkc", lowercase.Name, en.StopName, id.StopName, stemmer},
+		"token_filters": filters,
+	}); err != nil {
+		return nil, err
+	}
+	if err := m.AddCustomAnalyzer(phraseAnalyzer, map[string]any{
+		"type":          custom.Name,
+		"tokenizer":     unicode.Name,
+		"token_filters": append(filters, gapless),
 	}); err != nil {
 		return nil, err
 	}
@@ -61,7 +181,7 @@ func newMapping() (*mapping.IndexMappingImpl, error) {
 		f := bleve.NewTextFieldMapping()
 		f.Analyzer = analyzer
 		f.Store = store
-		f.IncludeTermVectors = store
+		f.IncludeTermVectors = true
 		f.IncludeInAll = false
 		f.DocValues = false
 		return f
@@ -74,8 +194,12 @@ func newMapping() (*mapping.IndexMappingImpl, error) {
 		return f
 	}
 
+	phrase := text(false)
+	phrase.Name = "title_phrase"
+	phrase.Analyzer = phraseAnalyzer
+
 	d := bleve.NewDocumentStaticMapping()
-	d.AddFieldMappingsAt("title", text(true))
+	d.AddFieldMappingsAt("title", text(true), phrase)
 	d.AddFieldMappingsAt("abstract", text(true))
 	d.AddFieldMappingsAt("creator", text(false))
 	d.AddFieldMappingsAt("contributor", text(false))
@@ -146,7 +270,10 @@ func (x *Index) Apply(upserts []record.Record, deletes []string, gen string) err
 	for _, id := range deletes {
 		b.Delete(id)
 	}
-	return x.b.Batch(b)
+	if err := x.b.Batch(b); err != nil {
+		return err
+	}
+	return x.refreshStats()
 }
 
 func (x *Index) Get(id string) (*record.Record, error) {
@@ -192,8 +319,11 @@ func (x *Index) Sweep(source, gen string) (int, error) {
 	n := 0
 	for {
 		res, err := x.b.Search(bleve.NewSearchRequestOptions(q, 1000, 0, false))
-		if err != nil || len(res.Hits) == 0 {
+		if err != nil {
 			return n, err
+		}
+		if len(res.Hits) == 0 {
+			return n, x.refreshStats()
 		}
 		b := x.b.NewBatch()
 		for _, h := range res.Hits {

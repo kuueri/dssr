@@ -1,6 +1,7 @@
 package index
 
 import (
+	"context"
 	"encoding/json"
 	"slices"
 	"strings"
@@ -81,7 +82,8 @@ func (x *Index) Search(q Query) (*Result, error) {
 	var should []query.Query
 	if len(tokens) > 1 {
 		p := query.NewMatchPhraseQuery(strings.Join(words, " "))
-		p.SetField("title")
+		p.SetField("title_phrase")
+		p.Analyzer = phraseAnalyzer
 		p.SetBoost(3)
 		should = append(should, p)
 	}
@@ -95,12 +97,13 @@ func (x *Index) Search(q Query) (*Result, error) {
 	}
 	bq := query.NewBooleanQuery(must, should, nil)
 	bq.AddFilter(filter)
-	res, err := x.b.Search(x.request(bq, q))
+	ctx := context.WithValue(context.Background(), search.BM25StatsKey, x.stats.Load())
+	res, err := x.b.SearchInContext(ctx, x.request(bq, q))
 	if err == nil && res.Total == 0 && len(clauses) > 1 {
 		bq = query.NewBooleanQuery(nil, append(slices.Clone(clauses), should...), nil)
 		bq.SetMinShould(1)
 		bq.AddFilter(filter)
-		res, err = x.b.Search(x.request(bq, q))
+		res, err = x.b.SearchInContext(ctx, x.request(bq, q))
 	}
 	if err != nil {
 		return nil, err
@@ -138,12 +141,11 @@ func (x *Index) request(q query.Query, p Query) *bleve.SearchRequest {
 	for name, field := range facetFields {
 		req.AddFacet(name, bleve.NewFacetRequest(field, 10))
 	}
+	order := search.SortOrder{&search.SortScore{Desc: true}, &search.SortDocID{}}
 	if p.Newest {
-		req.SortByCustom(search.SortOrder{
-			&search.SortField{Field: "issued", Desc: true, Type: search.SortFieldAsString, Missing: search.SortFieldMissingLast},
-			&search.SortScore{Desc: true},
-		})
+		order = append(search.SortOrder{&search.SortField{Field: "issued", Desc: true, Type: search.SortFieldAsString, Missing: search.SortFieldMissingLast}}, order...)
 	}
+	req.SortByCustom(order)
 	return req
 }
 
