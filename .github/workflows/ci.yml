@@ -24,6 +24,8 @@ permissions:
   contents: read
 jobs:
   test:
+    # A release commit pushed to main is tested by the release workflow of its tag.
+    if: github.event_name != 'push' || github.ref_type == 'tag' || !startsWith(github.event.head_commit.message, 'release:')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
