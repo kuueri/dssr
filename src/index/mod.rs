@@ -88,13 +88,13 @@ fn schema() -> (Schema, Fields) {
     (b.build(), fields)
 }
 
-pub fn bleve_index(path: &Path) -> bool {
+fn legacy_index(path: &Path) -> bool {
     path.join("index_meta.json").exists()
 }
 
 impl Index {
     pub fn open(path: &Path) -> Result<Index> {
-        if bleve_index(path) {
+        if legacy_index(path) {
             return Err(format!(
                 "{} holds an index of an older dssr; run sudo dssr reindex",
                 path.display()

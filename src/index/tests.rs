@@ -269,7 +269,7 @@ fn reopen() {
 }
 
 #[test]
-fn refuses_bleve_index() {
+fn refuses_legacy_index() {
     let (_t, dir) = temp_dir();
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("index_meta.json"), "{}").unwrap();
