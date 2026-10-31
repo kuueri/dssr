@@ -47,6 +47,13 @@
 						"explode": true
 					},
 					{
+						"name": "source",
+						"in": "query",
+						"description": "Source ID from the configuration, repeatable",
+						"schema": { "type": "array", "items": { "type": "string" } },
+						"explode": true
+					},
+					{
 						"name": "sort",
 						"in": "query",
 						"schema": {

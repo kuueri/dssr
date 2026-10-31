@@ -44,6 +44,8 @@ pub struct Filter {
     pub collection: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub language: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub source: Vec<String>,
     #[serde(skip_serializing_if = "String::is_empty")]
     pub year: String,
 }
@@ -77,6 +79,7 @@ pub fn event(q: &SearchQuery, res: &SearchResult, client: &str, took: Duration, 
             types: q.types.clone(),
             collection: q.collections.clone(),
             language: q.languages.clone(),
+            source: q.sources.clone(),
             year,
         },
         sort: if q.newest { "newest" } else { "relevance" },

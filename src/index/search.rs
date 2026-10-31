@@ -25,6 +25,7 @@ pub struct Query {
     pub year_to: String,
     pub collections: Vec<String>,
     pub languages: Vec<String>,
+    pub sources: Vec<String>,
     pub newest: bool,
     pub page: usize,
     pub limit: usize,
@@ -191,6 +192,7 @@ impl Builder<'_> {
             (f.r#type, &q.types),
             (f.is_part_of, &q.collections),
             (f.language, &q.languages),
+            (f.source, &q.sources),
         ] {
             if !values.is_empty() {
                 let any = values

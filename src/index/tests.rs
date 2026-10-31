@@ -162,6 +162,32 @@ fn search() {
 }
 
 #[test]
+fn source_filter() {
+    let (_t, x) = open();
+    x.apply(&[rec("slims:9", "Wisata religi")], &[], "1")
+        .unwrap();
+    for (sources, want) in [
+        (vec!["slims"], "slims:9"),
+        (vec!["repo"], "repo:1/1,repo:1/3"),
+        (vec!["repo", "slims"], "repo:1/1,repo:1/3,slims:9"),
+        (vec!["nope"], ""),
+    ] {
+        let mut got: Vec<String> = x
+            .search(&SearchQuery {
+                sources: strings(&sources),
+                ..query("wisata")
+            })
+            .unwrap()
+            .results
+            .into_iter()
+            .map(|h| h.record.id)
+            .collect();
+        got.sort();
+        assert_eq!(got.join(","), want, "{sources:?}");
+    }
+}
+
+#[test]
 fn most_words() {
     let (_t, x) = open();
     x.apply(

@@ -171,6 +171,10 @@ Client services use the HTTP API with a bearer token:
 curl -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:8080/v1/search?q=wisata+ziarah&limit=5"
 ```
 
+To search only one source, add `source=<id>`, for example `&source=slims`, or `--source slims` to `dssr search`.
+Give it more than one time to search more than one source.
+A source ID that dssr does not know gives no results, not an error.
+
 | Endpoint                            | Purpose                                     |
 | ----------------------------------- | ------------------------------------------- |
 | `GET /v1/search`                    | Search with filters, highlights, and facets |

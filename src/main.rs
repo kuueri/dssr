@@ -104,11 +104,13 @@ If you give a filter option more than one time, a record must match one of its v
 If you give more than one filter option, a record must match all of them.
 To see the values for a filter, run dssr search <query> --json and read \"facets\".
 The facet isPartOf shows the values for --collection.
+dssr status shows the values for --source.
 
 Examples:
   dssr search wisata ziarah
   dssr search '\"wisata ziarah\"' --year 2020-2024 --sort newest
   dssr search ekonomi --type Thesis --type Article --language id
+  dssr search wisata --source slims
 "
         }
         "get" => {
@@ -538,6 +540,10 @@ fn search(args: &[String]) -> Result<()> {
         "language",
         "Show only records in this `language`, for example id or en.\nUse the exact value.",
     );
+    fs.multi(
+        "source",
+        "Show only records of the source with this `ID`, for example repo.",
+    );
     fs.text("year", "", "Show only records issued in this `year` or range of years, for example 2020 or 2020-2024.\nThe range includes the first and the last year.");
     fs.text("sort", "relevance", "Sort the results in this `order`: relevance or newest.\nWith newest, the latest issue date comes first.");
     fs.text("page", "1", "Show this `page` of results. The first page is 1.\ndssr shows only the first 1000 results.");
@@ -550,7 +556,7 @@ fn search(args: &[String]) -> Result<()> {
     let q = parse(&mut fs, args).join(" ");
 
     let mut v: Vec<(&str, &str)> = vec![("q", &q)];
-    for key in ["type", "collection", "language"] {
+    for key in ["type", "collection", "language", "source"] {
         v.extend(fs.all(key).iter().map(|x| (key, x.as_str())));
     }
     v.extend([
@@ -706,6 +712,8 @@ struct EvalFilter {
     collection: Vec<String>,
     #[serde(default)]
     language: Vec<String>,
+    #[serde(default)]
+    source: Vec<String>,
 }
 
 fn eval(args: &[String]) -> Result<()> {
@@ -724,6 +732,7 @@ fn eval(args: &[String]) -> Result<()> {
             ("type", &c.filter.r#type),
             ("collection", &c.filter.collection),
             ("language", &c.filter.language),
+            ("source", &c.filter.source),
         ] {
             v.extend(values.iter().map(|x| (key, x.as_str())));
         }

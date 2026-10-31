@@ -145,6 +145,7 @@ pub fn parse_query(v: &Values) -> Result<SearchQuery, &'static str> {
         types: v.all("type"),
         collections: v.all("collection"),
         languages: v.all("language"),
+        sources: v.all("source"),
         ..Default::default()
     };
     if q.q.is_empty() {
@@ -553,6 +554,22 @@ mod tests {
         assert_eq!(res.results[0].record.id, "repo:123456789/56");
         assert_eq!(res.results[0].record.issued, "2020");
         assert_eq!(res.facets["type"][0].value, "Thesis");
+    }
+
+    #[tokio::test]
+    async fn search_source_filter() {
+        let (_t, _dir, s) = setup();
+        let app = api(s);
+        for (target, want) in [
+            ("/v1/search?q=wisata&source=repo", 1),
+            ("/v1/search?q=wisata&source=nope&source=repo", 1),
+            ("/v1/search?q=wisata&source=nope", 0),
+        ] {
+            let (status, _, body) = call(&app, "GET", target, "secret").await;
+            assert_eq!(status, 200, "{target}: {body}");
+            let res: SearchResult = serde_json::from_str(&body).unwrap();
+            assert_eq!(res.total, want, "{target}");
+        }
     }
 
     #[test]
