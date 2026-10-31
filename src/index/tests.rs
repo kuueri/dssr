@@ -319,6 +319,52 @@ fn paging() {
 }
 
 #[test]
+fn purge_removes_source() {
+    let (t, dir) = temp_dir();
+    let path = dir.join("index");
+    let x = Index::open(&path).unwrap();
+    x.apply(&fixtures(), &[], "1").unwrap();
+    x.apply(&[rec("slims:9", "Katalog")], &[], "1").unwrap();
+    for k in ["cursor:repo", "gen:repo", "suspended:repo", "cursor:slims"] {
+        x.set_meta(k, "v").unwrap();
+    }
+    assert_eq!(x.purge("repo").unwrap(), 3);
+    assert_eq!(
+        (x.count("repo").unwrap(), x.count("slims").unwrap()),
+        (0, 1)
+    );
+    for k in ["cursor:repo", "gen:repo", "suspended:repo"] {
+        assert_eq!(x.meta(k), "", "{k}");
+    }
+    assert_eq!(x.meta("cursor:slims"), "v");
+    let snap = x.current();
+    assert_eq!(snap.searcher.segment_readers().len(), 1);
+    assert!(
+        snap.searcher
+            .segment_readers()
+            .iter()
+            .all(|s| s.num_deleted_docs() == 0)
+    );
+    drop(x);
+    let x = Index::open(&path).unwrap();
+    assert_eq!(
+        (x.count("repo").unwrap(), x.count("slims").unwrap()),
+        (0, 1)
+    );
+    assert_eq!(x.purge("nope").unwrap(), 0);
+    drop(t);
+}
+
+#[test]
+fn sources_lists_only_live() {
+    let (_t, x) = open();
+    x.apply(&[rec("slims:9", "Katalog")], &[], "1").unwrap();
+    assert_eq!(x.sources().unwrap(), ["repo", "slims"]);
+    x.apply(&[], &["slims:9".into()], "1").unwrap();
+    assert_eq!(x.sources().unwrap(), ["repo"]);
+}
+
+#[test]
 fn get_count_sweep_meta() {
     let (_t, x) = open();
     assert_eq!(
