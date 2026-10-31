@@ -333,8 +333,8 @@ async fn serve_async(cfg: Config) -> Result<()> {
             .map_err(|e| format!("open index {}: {e}", cfg.index_path))?,
     );
 
-    let agent = format!("dssr/{}", version());
-    let h = Harvester::new(idx.clone(), cfg.sources.clone(), &agent);
+    let agent = "OAIHarvester/1.0";
+    let h = Harvester::new(idx.clone(), cfg.sources.clone(), agent);
     let (search_log, log_task) = cfg
         .search_log
         .as_ref()
