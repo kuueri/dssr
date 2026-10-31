@@ -61,6 +61,12 @@ index_path: /var/lib/dssr/index
 admin_socket: /run/dssr/admin.sock
 timezone: Asia/Jakarta
 
+# Log each API search as one JSON line, for dssr eval.
+# search_log:
+#   output: /var/log/dssr/search.log   # or stdout
+#   hits: 10
+#   max_size_mb: 64
+
 clients:
   - name: default
     token_sha256: ${hash}
