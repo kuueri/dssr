@@ -4,12 +4,14 @@
 #   bash scripts/package.sh 0.1.0
 #
 # The tag is a bare SemVer version without "v", and CHANGELOG.md must have a section for it.
-# The static build needs the rustup target x86_64-unknown-linux-musl and musl-gcc, which ring uses to compile its C code.
+# It builds two variants: dssr_linux_amd64 is a static musl binary for every Linux host, and dssr_linux_amd64_gnu links the glibc of the build host.
+# The musl build needs the rustup target x86_64-unknown-linux-musl and musl-gcc, which ring uses to compile its C code.
 set -Eeuo pipefail
 shopt -s inherit_errexit nocasematch
 IFS=$'\n\t'
 
-readonly TARGET=x86_64-unknown-linux-musl
+readonly MUSL=x86_64-unknown-linux-musl
+readonly GNU=x86_64-unknown-linux-gnu
 
 die() {
 	printf 'package: %s\n' "$*" >&2
@@ -19,7 +21,7 @@ die() {
 # Print name, directory, license, and repository of every crate linked into the binaries.
 crates() {
 	local linked
-	linked=$(cargo tree --locked -e normal,build --target "${TARGET}" --prefix none --format '{p}' |
+	linked=$(cargo tree --locked -e normal,build --target "${MUSL}" --prefix none --format '{p}' |
 		awk 'NF && $1 != "dssr" { print $1 " " substr($2, 2) }' | sort -u)
 	cargo metadata --format-version 1 --locked |
 		jq -r --arg linked "${linked}" '
@@ -69,6 +71,17 @@ collect_licenses() {
 	done <<<"${list}"
 }
 
+# Build one target and pack it with the license files as dist/<name>.tar.gz.
+package() {
+	local tag=$1 target=$2 name=$3
+	local dir=dist/${name}
+	mkdir -p "${dir}"
+	DSSR_BUILD_VERSION=${tag} CC_x86_64_unknown_linux_musl=musl-gcc cargo build --locked --release --target "${target}"
+	cp -- "target/${target}/release/dssr" LICENSE deploy/dssr.service "${dir}/"
+	cp -r -- dist/third_party "${dir}/"
+	tar -C "${dir}" -czf "dist/${name}.tar.gz" .
+}
+
 release_notes() {
 	awk -v heading="## [$1]" '
 		index($0, heading) == 1 { found = 1; next }
@@ -95,14 +108,10 @@ main() {
 	printf '%s\n' "${notes}" >dist/notes.md
 	collect_licenses dist/third_party
 
-	local dir=dist/dssr_linux_amd64
-	mkdir -p "${dir}"
-	DSSR_BUILD_VERSION=${tag} CC_x86_64_unknown_linux_musl=musl-gcc cargo build --locked --release --target "${TARGET}"
-	cp -- "target/${TARGET}/release/dssr" LICENSE deploy/dssr.service "${dir}/"
-	cp -r -- dist/third_party "${dir}/"
-	tar -C "${dir}" -czf dist/dssr_linux_amd64.tar.gz .
+	package "${tag}" "${MUSL}" dssr_linux_amd64
+	package "${tag}" "${GNU}" dssr_linux_amd64_gnu
 
-	(cd dist && sha256sum dssr_linux_amd64.tar.gz >checksums.txt)
+	(cd dist && sha256sum dssr_linux_amd64.tar.gz dssr_linux_amd64_gnu.tar.gz >checksums.txt)
 	printf 'package: built %s\n' "${tag}"
 }
 
