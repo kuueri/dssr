@@ -32,6 +32,14 @@ pub struct Status {
     pub version: String,
     pub started: DateTime<FixedOffset>,
     pub sources: Vec<SourceStatus>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub orphans: Vec<Orphan>,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct Orphan {
+    pub id: String,
+    pub docs: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -305,15 +313,26 @@ async fn record(State(s): App, Path((source, handle)): Path<(String, String)>) -
 }
 
 async fn status(State(s): App) -> Response {
-    match s.h.status() {
-        Ok(sources) => ok(
-            StatusCode::OK,
-            Status {
-                version: s.version.clone(),
-                started: s.started,
-                sources,
-            },
-        ),
+    let result: crate::Result<Status> = (|| {
+        let sources = s.h.status().map_err(|e| e.to_string())?;
+        let mut orphans = Vec::new();
+        for id in s.idx.sources()? {
+            if !s.sources.contains(&id) {
+                orphans.push(Orphan {
+                    docs: s.idx.count(&id)?,
+                    id,
+                });
+            }
+        }
+        Ok(Status {
+            version: s.version.clone(),
+            started: s.started,
+            sources,
+            orphans,
+        })
+    })();
+    match result {
+        Ok(st) => ok(StatusCode::OK, st),
         Err(e) => problem(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
     }
 }
@@ -477,10 +496,36 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn status_orphans() {
+        let (_t, s) = setup();
+        s.idx
+            .apply(
+                &[Record {
+                    id: "old:1".into(),
+                    source: "old".into(),
+                    ..Default::default()
+                }],
+                &[],
+                "1",
+            )
+            .unwrap();
+        let (_, _, body) = call(&admin(s), "GET", "/status", "").await;
+        let st: Status = serde_json::from_str(&body).unwrap();
+        assert_eq!(
+            st.orphans,
+            [Orphan {
+                id: "old".into(),
+                docs: 1
+            }]
+        );
+    }
+
+    #[tokio::test]
     async fn admin_routes() {
         let (_t, s) = setup();
         let app = admin(s);
         let (_, _, body) = call(&app, "GET", "/status", "").await;
+        assert!(!body.contains("orphans"));
         let st: Status = serde_json::from_str(&body).unwrap();
         assert_eq!((st.sources.len(), st.sources[0].docs), (1, 1));
         assert_eq!(call(&app, "POST", "/harvest?source=nope", "").await.0, 404);

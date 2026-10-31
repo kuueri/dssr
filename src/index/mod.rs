@@ -3,12 +3,13 @@ mod node;
 mod search;
 mod stem;
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, RwLock};
 
 use tantivy::collector::{Count, TopDocs};
 use tantivy::directory::MmapDirectory;
+use tantivy::indexer::NoMergePolicy;
 use tantivy::query::{BooleanQuery, Occur, Query, TermQuery};
 use tantivy::schema::{
     Field, IndexRecordOption, STORED, STRING, Schema, TextFieldIndexing, TextOptions, Value,
@@ -260,6 +261,13 @@ impl Index {
             .unwrap_or_default()
     }
 
+    fn write_state(&self, next: &BTreeMap<String, String>) -> Result<()> {
+        let tmp = self.state_path.with_extension("json.tmp");
+        std::fs::write(&tmp, serde_json::to_vec_pretty(next)?)?;
+        std::fs::rename(&tmp, &self.state_path)?;
+        Ok(())
+    }
+
     pub fn set_meta(&self, key: &str, val: &str) -> Result<()> {
         let mut state = self.state.lock().unwrap();
         let mut next = state.clone();
@@ -268,9 +276,7 @@ impl Index {
         } else {
             next.insert(key.to_string(), val.to_string());
         }
-        let tmp = self.state_path.with_extension("json.tmp");
-        std::fs::write(&tmp, serde_json::to_vec_pretty(&next)?)?;
-        std::fs::rename(&tmp, &self.state_path)?;
+        self.write_state(&next)?;
         *state = next;
         Ok(())
     }
@@ -311,6 +317,53 @@ impl Index {
             self.refresh()?;
         }
         Ok(n)
+    }
+
+    pub fn purge(&self, source: &str) -> Result<usize> {
+        let n = self.count(source)? as usize;
+        {
+            let mut w = self.writer.lock().unwrap();
+            w.set_merge_policy(Box::new(NoMergePolicy));
+            w.delete_query(Box::new(self.source_query(source)))?;
+            w.commit()?;
+            let ids = w.index().searchable_segment_ids()?;
+            if !ids.is_empty() {
+                w.merge(&ids).wait()?;
+            }
+            w.garbage_collect_files().wait()?;
+        }
+        {
+            let mut state = self.state.lock().unwrap();
+            let mut next = state.clone();
+            for key in ["cursor", "gen", "suspended"] {
+                next.remove(&format!("{key}:{source}"));
+            }
+            self.write_state(&next)?;
+            *state = next;
+        }
+        self.refresh()?;
+        Ok(n)
+    }
+
+    pub fn sources(&self) -> Result<Vec<String>> {
+        let snap = self.current();
+        let mut found = BTreeSet::new();
+        for seg in snap.searcher.segment_readers() {
+            let inverted = seg.inverted_index(self.fields.source)?;
+            let mut terms = inverted.terms().stream()?;
+            while terms.advance() {
+                if terms.value().doc_freq > 0 {
+                    found.insert(std::str::from_utf8(terms.key())?.to_string());
+                }
+            }
+        }
+        let mut out = Vec::new();
+        for source in found {
+            if self.count(&source)? > 0 {
+                out.push(source);
+            }
+        }
+        Ok(out)
     }
 }
 

@@ -1,4 +1,5 @@
 mod config;
+mod doctor;
 mod flags;
 mod harvest;
 mod index;
@@ -8,7 +9,7 @@ mod record;
 mod server;
 
 use std::io::{Read, Write};
-use std::os::unix::fs::{FileTypeExt, MetadataExt, PermissionsExt};
+use std::os::unix::fs::{FileTypeExt, MetadataExt, PermissionsExt, lchown};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::Arc;
@@ -37,9 +38,11 @@ const USAGE: &str = "Usage:
   dssr search  [options] <query>
   dssr get     [options] <id>
   dssr status  [options]
+  dssr doctor  [options]
   dssr eval    [options] <file>
   dssr update
   dssr reindex
+  dssr remove <id>
   dssr revoke
   dssr uninstall
   dssr --version
@@ -120,6 +123,16 @@ Show one record as JSON.
 Show the record count, cursor, next harvest, last harvest, and dropped fields of each source.
 "
         }
+        "doctor" => {
+            "Usage: dssr doctor [options]
+
+Check this dssr installation and show the result of each check.
+dssr checks the version, the configuration, the service, the admin socket, the HTTP API, the index, the free disk space, and the OAI-PMH endpoint of each source.
+The command fails when a check fails. A warning does not make the command fail.
+Some checks need root. To do all checks, run sudo dssr doctor.
+The command also works when dssr serve does not run.
+"
+        }
         "eval" => {
             "Usage: dssr eval [options] <file>
 
@@ -150,6 +163,17 @@ Run it after a release that changes the index, because the index keeps the analy
 dssr stops, deletes the directory at index_path, and starts again.
 Search results stay incomplete until the harvest of each source ends.
 Run it only when every source answers OAI-PMH, because the index starts empty.
+"
+        }
+        "remove" => {
+            "Usage: sudo dssr remove <id>
+
+Remove a source and all its records from this host.
+<id> is the source ID, for example repo.
+dssr stops, removes the source from /etc/dssr/dssr.yaml, deletes its records, cursor, and suspension from the index, and starts again.
+If the source is not in /etc/dssr/dssr.yaml, dssr deletes only its records and its state in the index.
+The command does not start while a harvest runs, because the restart stops the harvest.
+You cannot undo this command. To harvest the source again, add it to /etc/dssr/dssr.yaml and restart dssr.
 "
         }
         "revoke" => {
@@ -221,9 +245,11 @@ fn main() {
         "search" => search(rest),
         "get" => get(rest),
         "status" => status(rest),
+        "doctor" => doctor::doctor(rest),
         "eval" => eval(rest),
         "update" => update(rest),
         "reindex" => reindex(rest),
+        "remove" => remove(rest),
         "revoke" => revoke(rest),
         "uninstall" => uninstall(rest),
         _ => {
@@ -1144,6 +1170,135 @@ fn reindex(args: &[String]) -> Result<()> {
     Ok(())
 }
 
+fn chown_tree(path: &Path, uid: u32, gid: u32) -> Result<()> {
+    lchown(path, Some(uid), Some(gid))?;
+    if std::fs::symlink_metadata(path)?.file_type().is_dir() {
+        for entry in std::fs::read_dir(path)? {
+            chown_tree(&entry?.path(), uid, gid)?;
+        }
+    }
+    Ok(())
+}
+
+fn remove(args: &[String]) -> Result<()> {
+    let mut fs = new_flags("remove");
+    let pos = parse(&mut fs, args);
+    if pos.len() != 1 {
+        return Err("remove needs exactly one source id, for example repo".into());
+    }
+    let id = &pos[0];
+    if !config::valid_source_id(id) {
+        return Err(format!("{id:?} is not a source id").into());
+    }
+    if !is_root() {
+        return Err("run as root: sudo dssr remove <id>".into());
+    }
+    let cfg_path = fs.get("config");
+    let cfg = Config::load(cfg_path)?;
+    if let Ok(body) = call(cfg_path, "GET", "/status")
+        && let Ok(st) = serde_json::from_slice::<Status>(&body)
+    {
+        let ids: Vec<&str> = st
+            .sources
+            .iter()
+            .filter(|s| s.running)
+            .map(|s| s.id.as_str())
+            .collect();
+        if !ids.is_empty() {
+            return Err(format!(
+                "a harvest is running for {}; wait until it ends or run dssr cancel, then run dssr remove again",
+                ids.join(", ")
+            )
+            .into());
+        }
+    }
+    let sc = systemctl().ok_or("systemctl not found; stop dssr and run dssr remove again")?;
+    run_output(&sc, &["stop", "dssr.service"]).map_err(|e| format!("stop dssr.service: {e}"))?;
+    let restart = |msg: String| -> Error {
+        match run_output(&sc, &["start", "dssr.service"]) {
+            Ok(()) => msg.into(),
+            Err(e) => format!("{msg}; dssr is stopped: {e}").into(),
+        }
+    };
+    if is_active(&sc) {
+        return Err(restart(
+            "dssr.service is still active; stop it and run dssr remove again".into(),
+        ));
+    }
+    if socket_in_use(&cfg.admin_socket) {
+        return Err(restart(format!(
+            "{} is in use; stop dssr and run dssr remove again",
+            cfg.admin_socket
+        )));
+    }
+    let index_path = Path::new(&cfg.index_path);
+    let in_config = cfg.sources.iter().any(|s| s.id == *id);
+    if !index_path.exists() && !in_config {
+        return Err(restart(format!(
+            "unknown source {id}: it is not in {cfg_path} or in the index"
+        )));
+    }
+    let owner = std::fs::metadata(index_path)
+        .or_else(|_| std::fs::metadata(index_path.parent().unwrap_or(Path::new("."))))
+        .map(|m| (m.uid(), m.gid()))
+        .map_err(|e| restart(format!("read the owner of {}: {e}", index_path.display())))?;
+    let result: Result<(bool, usize)> = (|| {
+        let idx = if index_path.exists() {
+            Some(Index::open(index_path)?)
+        } else {
+            None
+        };
+        let known = in_config
+            || idx.as_ref().is_some_and(|x| {
+                x.count(id).ok().is_some_and(|n| n > 0)
+                    || ["cursor", "gen", "suspended"]
+                        .iter()
+                        .any(|k| !x.meta(&format!("{k}:{id}")).is_empty())
+            });
+        if !known {
+            return Err(
+                format!("unknown source {id}: it is not in {cfg_path} or in the index").into(),
+            );
+        }
+        let config_removed = if in_config {
+            let text = std::fs::read_to_string(cfg_path)?;
+            let (out, removed) = remove_source(&text, id)?;
+            if !removed {
+                return Err(format!("cannot remove source {id:?} from {cfg_path}").into());
+            }
+            replace_config(cfg_path, &out)?;
+            true
+        } else {
+            false
+        };
+        let n = match idx {
+            Some(idx) => {
+                let n = idx.purge(id)?;
+                drop(idx);
+                n
+            }
+            None => 0,
+        };
+        if index_path.exists() {
+            chown_tree(index_path, owner.0, owner.1)?;
+        }
+        Ok((config_removed, n))
+    })();
+    let start = run_output(&sc, &["start", "dssr.service"]);
+    match (result, start) {
+        (Ok((config_removed, n)), Ok(())) => {
+            println!("removed source {id}: deleted {n} records and its cursor from the index");
+            if config_removed {
+                println!("removed {id} from {cfg_path}");
+            }
+            Ok(())
+        }
+        (Ok(_), Err(e)) => Err(format!("start dssr.service: {e}").into()),
+        (Err(e), Ok(())) => Err(e),
+        (Err(e), Err(start)) => Err(format!("{e}; dssr is stopped: {start}").into()),
+    }
+}
+
 fn revoke(args: &[String]) -> Result<()> {
     no_args("revoke", args)?;
     if !is_root() {
@@ -1258,6 +1413,81 @@ fn set_client_token(text: &str, name: &str, hash: &str) -> Result<(String, bool)
     Ok((out, replaced))
 }
 
+fn remove_source(text: &str, id: &str) -> Result<(String, bool)> {
+    fn parse_ids(text: &str) -> Result<Vec<String>> {
+        #[derive(Deserialize)]
+        struct Sources {
+            #[serde(default)]
+            sources: Option<Vec<config::Source>>,
+        }
+        Ok(serde_norway::from_str::<Sources>(text)?
+            .sources
+            .unwrap_or_default()
+            .into_iter()
+            .map(|s| s.id)
+            .collect())
+    }
+
+    let mut lines: Vec<String> = text.lines().map(str::to_string).collect();
+    let Some(at) = lines.iter().position(|l| l.starts_with("sources:")) else {
+        return Ok((text.to_string(), false));
+    };
+    let value = strip_comment(&lines[at]["sources:".len()..]);
+    if !matches!(value, "" | "~" | "null" | "[]") {
+        return Err("sources is not a block list".into());
+    }
+    let mut items: Vec<(usize, usize, String)> = Vec::new();
+    let mut current: Option<(usize, usize, String)> = None;
+    let mut i = at + 1;
+    while i < lines.len() {
+        let l = lines[i].clone();
+        let t = l.trim_start();
+        if t.is_empty() || t.starts_with('#') {
+            i += 1;
+            continue;
+        }
+        if indent(&l) == 0 && !t.starts_with("- ") {
+            break;
+        }
+        if let Some(field) = t.strip_prefix("- ") {
+            if let Some(item) = current.take() {
+                items.push(item);
+            }
+            let field = field.trim_start();
+            let id_value = field
+                .strip_prefix("id:")
+                .map(|v| unquote(strip_comment(v)).to_string())
+                .unwrap_or_default();
+            current = Some((i, i, id_value));
+        } else if let Some((_, end, id_value)) = current.as_mut() {
+            *end = i;
+            if let Some(v) = t.strip_prefix("id:") {
+                *id_value = unquote(strip_comment(v)).to_string();
+            }
+        }
+        i += 1;
+    }
+    if let Some(item) = current {
+        items.push(item);
+    }
+    let Some((start, end, _)) = items.iter().find(|(_, _, item_id)| item_id == id) else {
+        return Ok((text.to_string(), false));
+    };
+
+    let old = parse_ids(text)?;
+    let expected: Vec<String> = old.iter().filter(|old_id| *old_id != id).cloned().collect();
+    lines.drain(*start..=*end);
+    let mut out = lines.join("\n");
+    if text.ends_with('\n') {
+        out.push('\n');
+    }
+    let new = parse_ids(&out)?;
+    if new != expected {
+        return Err(format!("cannot remove source {id:?} from sources").into());
+    }
+    Ok((out, true))
+}
+
 fn replace_config(path: &str, data: &str) -> Result<()> {
     let meta = std::fs::metadata(path)?;
     let dir = Path::new(path).parent().unwrap_or(Path::new("."));
@@ -1297,6 +1527,72 @@ clients:
 # sources:
 #   - id: repo
 ";
+
+    const SOURCES_CONFIG: &str = "listen: 127.0.0.1:8080
+index_path: /var/lib/dssr/index
+admin_socket: /run/dssr/admin.sock
+
+sources:
+  - id: repo
+    name: Repository
+    oai_url: https://example.org/oai/request
+    schedule: \"0 3 * * 1\"
+  # the catalog
+  - name: Catalog
+    id: \"slims\"
+    oai_url: https://example.org/oai2.php
+    schedule: \"0 4 * * *\"
+
+# trailing note
+";
+
+    fn source_ids(s: &str) -> Vec<String> {
+        #[derive(Deserialize)]
+        struct S {
+            #[serde(default)]
+            sources: Option<Vec<config::Source>>,
+        }
+        serde_norway::from_str::<S>(s)
+            .unwrap()
+            .sources
+            .unwrap_or_default()
+            .into_iter()
+            .map(|s| s.id)
+            .collect()
+    }
+
+    #[test]
+    fn remove_present() {
+        let (out, removed) = remove_source(SOURCES_CONFIG, "repo").unwrap();
+        assert!(removed);
+        assert_eq!(source_ids(&out), ["slims"]);
+        for keep in [
+            "  # the catalog\n",
+            "# trailing note\n",
+            "listen: 127.0.0.1:8080\n",
+        ] {
+            assert!(out.contains(keep), "lost {keep:?}:\n{out}");
+        }
+        let (out, removed) = remove_source(SOURCES_CONFIG, "slims").unwrap();
+        assert!(removed);
+        assert_eq!(source_ids(&out), ["repo"]);
+        assert!(out.contains("# trailing note\n"));
+        let (out, _) = remove_source(&out, "repo").unwrap();
+        assert!(source_ids(&out).is_empty());
+    }
+
+    #[test]
+    fn remove_absent() {
+        assert_eq!(
+            remove_source(SOURCES_CONFIG, "nope").unwrap(),
+            (SOURCES_CONFIG.to_string(), false)
+        );
+        assert_eq!(
+            remove_source(TOKEN_CONFIG, "repo").unwrap(),
+            (TOKEN_CONFIG.to_string(), false)
+        );
+        assert!(remove_source("sources: [{id: repo}]\n", "repo").is_err());
+    }
 
     fn clients_of(s: &str) -> Vec<config::Client> {
         #[derive(Deserialize)]
@@ -1362,6 +1658,17 @@ clients:
             .filter(|e| e.file_name().to_string_lossy().starts_with(".dssr.yaml."))
             .collect();
         assert!(left.is_empty());
+    }
+
+    #[test]
+    fn chown_tree_nested() {
+        let (_t, dir) = index::tests::temp_dir();
+        std::fs::create_dir_all(dir.join("a/b")).unwrap();
+        std::fs::write(dir.join("a/b/f"), "x").unwrap();
+        std::os::unix::fs::symlink("/nonexistent", dir.join("a/link")).unwrap();
+        let m = std::fs::metadata(&dir).unwrap();
+        chown_tree(&dir, m.uid(), m.gid()).unwrap();
+        assert!(chown_tree(&dir.join("missing"), m.uid(), m.gid()).is_err());
     }
 
     #[test]

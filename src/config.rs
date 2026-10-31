@@ -71,7 +71,7 @@ pub fn encode_hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
 }
 
-fn valid_source_id(id: &str) -> bool {
+pub fn valid_source_id(id: &str) -> bool {
     let b = id.as_bytes();
     !b.is_empty()
         && (b[0].is_ascii_lowercase() || b[0].is_ascii_digit())
