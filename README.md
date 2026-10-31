@@ -140,8 +140,10 @@ The system journal keeps the old `dssr` entries, because journald has no per-uni
 ## Use
 
 On the server, run the `dssr` subcommands as root or as a member of the group `dssr`.
-The install script adds the user that runs `sudo` to the group, so log in again after the first install.
-To add another user, run `sudo usermod -aG dssr <user>`.
+The install script adds the user that runs `sudo` to the group.
+Log out and log back in so that your group membership is re-evaluated; over SSH, a new connection is enough, and on a desktop session, a restart may be necessary.
+Until then, run the subcommands with `sudo`, for example `sudo dssr status`.
+To add another user, run `sudo usermod -aG dssr <user>`, and that user must log in again too.
 The subcommands read `/etc/dssr/dssr.yaml`, and `--config` selects a different file.
 
 ```bash

@@ -174,7 +174,9 @@ main() {
 		printf '\n  dssr has no source yet. Add the sources to %s, then run: sudo systemctl restart dssr\n' "${CONF}"
 	fi
 	if [[ -n ${added} ]]; then
-		printf '\n  %s is now in the group dssr. Log in again to run dssr without sudo.\n' "${added}"
+		printf '\n  %s is now in the group dssr.\n' "${added}"
+		printf '  Log out and log back in so that your group membership is re-evaluated. On a desktop session, a restart may be necessary.\n'
+		printf '  Until then, run dssr with sudo, for example: sudo dssr status\n'
 	fi
 }
 

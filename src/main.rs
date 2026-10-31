@@ -406,7 +406,7 @@ fn call(cfg_path: &str, method: &str, path: &str) -> Result<Vec<u8>> {
             if e.downcast_ref::<std::io::Error>()
                 .is_some_and(|io| io.kind() == std::io::ErrorKind::PermissionDenied) =>
         {
-            return Err(format!("{e}; run as root, or add your user to the dssr group with sudo usermod -aG dssr $USER and log in again").into());
+            return Err(format!("{e}; run it with sudo, or add your user to the dssr group with sudo usermod -aG dssr $USER, then log out and log back in").into());
         }
         r => r?,
     };
