@@ -4,6 +4,23 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.12] - 2026-10-31
+
+### Added
+
+- `dssr search --source ID` and `GET /v1/search?source=ID` limit the results to configured sources. Give the option more than one time to search more than one source; an unknown source ID returns no results. The search log records the source filter.
+- New installs include a commented `search_log` example in `/etc/dssr/dssr.yaml`.
+
+### Changed
+
+- Harvest requests send `OAIHarvester/1.0` as the User-Agent instead of `dssr/<version>`.
+
+### Security
+
+- The systemd unit now sandboxes `dssr serve` with no capabilities, private devices, a protected clock and hostname, only the `AF_UNIX`, `AF_INET`, and `AF_INET6` address families, and a system-call filter.
+
+This release does not change the index, so `sudo dssr update` needs no reindex.
+
 ## [0.0.11] - 2026-10-31
 
 ### Added
@@ -133,6 +150,7 @@ This release changes the index. Run `sudo dssr update` and then `sudo dssr reind
 - `install.sh` to install or upgrade dssr as a systemd service from a GitHub release.
 - Release archives for linux/amd64 and linux/arm64 with SHA-256 checksums and the licenses of all dependencies.
 
+[0.0.12]: https://github.com/kuueri/dssr/compare/0.0.11...0.0.12
 [0.0.11]: https://github.com/kuueri/dssr/compare/0.0.10...0.0.11
 [0.0.10]: https://github.com/kuueri/dssr/compare/0.0.9...0.0.10
 [0.0.9]: https://github.com/kuueri/dssr/compare/0.0.8...0.0.9
