@@ -4,6 +4,21 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.11] - 2026-10-31
+
+### Added
+
+- `sudo dssr remove <id>` stops dssr, removes one source from `/etc/dssr/dssr.yaml`, deletes its records, cursor, and suspension from the index, and starts dssr again. If the source is no longer in the configuration, it deletes only the records and state in the index.
+- `dssr doctor` checks the version, configuration, service, admin socket, HTTP API, index, free disk space, and the OAI-PMH endpoint of each source, and shows the fix for each failure. It also works when dssr does not start.
+- `search_log` writes one JSON line per authorized `/v1/search` request, with the client name, query, filter, total, duration, and a sample of the top hits. Set `output` to `stdout` or an absolute file path; the file rotates to `search.log.01`, `search.log.02`, and so on at `max_size_mb`. The log is off until `search_log` is in `dssr.yaml`, and dssr does not delete old rotated files.
+
+### Changed
+
+- Releases also ship a glibc build, `dssr_linux_amd64_gnu.tar.gz`, next to the static musl build. `install.sh` uses the glibc build when it runs on the host and falls back to the static build otherwise.
+- `sudo dssr uninstall` also removes the search log directory `/var/log/dssr`.
+
+This release does not change the index, so `sudo dssr update` needs no reindex.
+
 ## [0.0.10] - 2026-10-31
 
 ### Changed
@@ -118,6 +133,7 @@ This release changes the index. Run `sudo dssr update` and then `sudo dssr reind
 - `install.sh` to install or upgrade dssr as a systemd service from a GitHub release.
 - Release archives for linux/amd64 and linux/arm64 with SHA-256 checksums and the licenses of all dependencies.
 
+[0.0.11]: https://github.com/kuueri/dssr/compare/0.0.10...0.0.11
 [0.0.10]: https://github.com/kuueri/dssr/compare/0.0.9...0.0.10
 [0.0.9]: https://github.com/kuueri/dssr/compare/0.0.8...0.0.9
 [0.0.8]: https://github.com/kuueri/dssr/compare/0.0.7...0.0.8
