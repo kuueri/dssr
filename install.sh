@@ -6,6 +6,7 @@
 # Environment:
 #   DSSR_VERSION  release tag to install, for example 0.1.0 (default: the latest release)
 #
+# On a host with glibc, the script installs the glibc build if it runs there; otherwise it installs the static musl build.
 # The first run writes /etc/dssr/dssr.yaml with a client token and no source; add the sources there and restart dssr.
 # A second run upgrades the binary and the unit file, keeps /etc/dssr/dssr.yaml, and restarts dssr.
 # The user that runs sudo joins the group dssr, so it can run the dssr subcommands without sudo.
@@ -22,6 +23,7 @@ readonly DOC_DIR=/usr/local/share/doc/dssr
 readonly CURL=(curl -fsSL --connect-timeout 15 --retry 3)
 
 WORK_DIR=""
+PKG=""
 
 log() { printf 'dssr-install: %s\n' "$*" >&2; }
 die() {
@@ -35,6 +37,20 @@ cleanup() {
 		rm -rf -- "${WORK_DIR}"
 	fi
 	exit "${code}"
+}
+
+# Download one archive, check it against checksums.txt, and unpack it into PKG.
+# A failed download returns 1, so the caller can fall back; a checksum mismatch stops the script.
+fetch() {
+	local base=$1 archive=$2
+	local dir=${WORK_DIR}/${archive%.tar.gz}
+	log "downloading ${base}/${archive}"
+	"${CURL[@]}" -o "${WORK_DIR}/${archive}" "${base}/${archive}" || return 1
+	(cd "${WORK_DIR}" && awk -v f="${archive}" '$2 == f' checksums.txt | sha256sum -c --quiet -) ||
+		die "checksum mismatch for ${archive}"
+	mkdir -p "${dir}" || return 1
+	tar -xzf "${WORK_DIR}/${archive}" -C "${dir}" || return 1
+	PKG=${dir}
 }
 
 write_config() {
@@ -82,17 +98,23 @@ main() {
 	trap cleanup EXIT
 	WORK_DIR=$(mktemp -d)
 
-	local file archive=dssr_linux_${arch}.tar.gz
-	for file in "${archive}" checksums.txt; do
-		log "downloading ${base}/${file}"
-		"${CURL[@]}" -o "${WORK_DIR}/${file}" "${base}/${file}" || die "cannot download ${base}/${file}"
-	done
-	(cd "${WORK_DIR}" && awk -v f="${archive}" '$2 == f' checksums.txt | sha256sum -c --quiet -) ||
-		die "checksum mismatch for ${archive}"
+	log "downloading ${base}/checksums.txt"
+	"${CURL[@]}" -o "${WORK_DIR}/checksums.txt" "${base}/checksums.txt" || die "cannot download ${base}/checksums.txt"
 
-	local pkg=${WORK_DIR}/pkg
-	mkdir -p "${pkg}"
-	tar -xzf "${WORK_DIR}/${archive}" -C "${pkg}"
+	local build=musl
+	if getconf GNU_LIBC_VERSION >/dev/null 2>&1; then
+		# shellcheck disable=SC2310 # fetch returns 1 on each failed step, so the caller can fall back
+		if fetch "${base}" "dssr_linux_${arch}_gnu.tar.gz" && "${PKG}/dssr" --version >/dev/null 2>&1; then
+			build=glibc
+		else
+			log "the glibc build does not run on this host; using the static musl build"
+		fi
+	fi
+	if [[ ${build} == musl ]]; then
+		# shellcheck disable=SC2310 # fetch returns 1 on each failed step
+		fetch "${base}" "dssr_linux_${arch}.tar.gz" || die "cannot download ${base}/dssr_linux_${arch}.tar.gz"
+	fi
+	local pkg=${PKG}
 
 	install -m 0755 "${pkg}/dssr" "${BIN}"
 	install -d -m 0755 "${DOC_DIR}"
@@ -137,6 +159,7 @@ main() {
 	fi
 
 	printf '\ndssr %s is installed and running.\n\n' "$("${BIN}" --version)"
+	printf '  Build          %s\n' "${build}"
 	printf '  Configuration  %s\n' "${CONF}"
 	printf '  Status         dssr status\n'
 	printf '  Log            journalctl -u dssr -f\n'
