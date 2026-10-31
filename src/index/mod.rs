@@ -17,6 +17,8 @@ use tantivy::schema::{
 use tantivy::tokenizer::TextAnalyzer;
 use tantivy::{IndexReader, IndexWriter, ReloadPolicy, Searcher, TantivyDocument, Term};
 
+#[cfg(test)]
+pub use search::Hit;
 pub use search::{Query as SearchQuery, SearchResult};
 
 use crate::Result;

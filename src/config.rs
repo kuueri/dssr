@@ -19,6 +19,8 @@ pub struct Config {
     pub clients: Vec<Client>,
     #[serde(default, deserialize_with = "list")]
     pub sources: Vec<Source>,
+    #[serde(default)]
+    pub search_log: Option<SearchLog>,
     #[serde(skip, default = "utc")]
     pub location: chrono_tz::Tz,
 }
@@ -45,6 +47,25 @@ pub struct Source {
     pub metadata_prefix: String,
     #[serde(default)]
     pub schedule: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SearchLog {
+    #[serde(default)]
+    pub output: String,
+    #[serde(default = "default_hits")]
+    pub hits: usize,
+    #[serde(default = "default_max_size_mb")]
+    pub max_size_mb: u64,
+}
+
+fn default_hits() -> usize {
+    10
+}
+
+fn default_max_size_mb() -> u64 {
+    64
 }
 
 fn utc() -> chrono_tz::Tz {
@@ -153,6 +174,17 @@ impl Config {
             }
             schedule(&s.schedule).map_err(|e| format!("source {:?}: schedule: {e}", s.id))?;
         }
+        if let Some(log) = &self.search_log {
+            if log.output != "stdout" && !std::path::Path::new(&log.output).is_absolute() {
+                return Err("search_log: output must be stdout or an absolute file path".into());
+            }
+            if !(1..=50).contains(&log.hits) {
+                return Err("search_log: hits must be between 1 and 50".into());
+            }
+            if log.max_size_mb < 1 {
+                return Err("search_log: max_size_mb must be at least 1".into());
+            }
+        }
         Ok(())
     }
 }
@@ -213,6 +245,31 @@ sources:
                 .sources
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn search_log_config() {
+        let base = "listen: x\nindex_path: /i\nadmin_socket: /s\n";
+        let load = |extra: &str| {
+            let mut c: Config = serde_norway::from_str(&format!("{base}{extra}")).unwrap();
+            c.validate().map(|_| c.search_log)
+        };
+        assert!(load("").unwrap().is_none());
+        let s = load("search_log:\n  output: stdout\n").unwrap().unwrap();
+        assert_eq!(
+            (s.output.as_str(), s.hits, s.max_size_mb),
+            ("stdout", 10, 64)
+        );
+        assert!(load("search_log:\n  output: /var/log/dssr/search.log\n  hits: 50\n").is_ok());
+        for bad in [
+            "search_log:\n  output: search.log\n",
+            "search_log:\n  output: \"\"\n",
+            "search_log:\n  output: stdout\n  hits: 0\n",
+            "search_log:\n  output: stdout\n  hits: 51\n",
+            "search_log:\n  output: stdout\n  max_size_mb: 0\n",
+        ] {
+            assert!(load(bad).is_err(), "{bad:?}");
+        }
     }
 
     #[test]

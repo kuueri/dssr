@@ -6,6 +6,7 @@ mod index;
 mod log;
 mod oai;
 mod record;
+mod searchlog;
 mod server;
 
 use std::io::{Read, Write};
@@ -188,7 +189,7 @@ Give the new token to the client service, which sends it in the header Authoriza
             "Usage: sudo dssr uninstall
 
 Stop dssr and remove it from this host.
-The command removes the service, the binary, the configuration, the index, and the dssr user and group.
+The command removes the service, the binary, the configuration, the index, the search log at /var/log/dssr, and the dssr user and group.
 You cannot undo this command.
 "
         }
@@ -204,6 +205,7 @@ const DOC_DIR: &str = "/usr/local/share/doc/dssr";
 const CONFIG_DIR: &str = "/etc/dssr";
 const CONFIG_FILE: &str = "/etc/dssr/dssr.yaml";
 const STATE_DIR: &str = "/var/lib/dssr";
+const LOG_DIR: &str = "/var/log/dssr";
 const RUNTIME_DIR: &str = "/run/dssr";
 
 const LATEST_RELEASE_URL: &str = "https://api.github.com/repos/kuueri/dssr/releases/latest";
@@ -333,7 +335,13 @@ async fn serve_async(cfg: Config) -> Result<()> {
 
     let agent = format!("dssr/{}", version());
     let h = Harvester::new(idx.clone(), cfg.sources.clone(), &agent);
-    let srv = Server::new(idx, h.clone(), &cfg, version());
+    let (search_log, log_task) = cfg
+        .search_log
+        .as_ref()
+        .map(searchlog::start)
+        .transpose()?
+        .unzip();
+    let srv = Server::new(idx, h.clone(), &cfg, version(), search_log);
     let (stop_tx, stop_rx) = tokio::sync::watch::channel(false);
     let graceful = |mut rx: tokio::sync::watch::Receiver<bool>| async move {
         let _ = rx.wait_for(|v| *v).await;
@@ -384,6 +392,9 @@ async fn serve_async(cfg: Config) -> Result<()> {
     })
     .await;
     h.stop().await;
+    if let Some(task) = log_task {
+        let _ = tokio::time::timeout(Duration::from_secs(5), task).await;
+    }
     result
 }
 
@@ -1068,6 +1079,7 @@ fn uninstall(args: &[String]) -> Result<()> {
         remove_tree(&mut errs, &index_path);
     }
     remove_tree(&mut errs, STATE_DIR);
+    remove_tree(&mut errs, LOG_DIR);
     if let Ok(m) = std::fs::symlink_metadata(&admin_socket) {
         if m.file_type().is_socket() {
             remove(&mut errs, &admin_socket);
@@ -1116,6 +1128,7 @@ fn uninstall(args: &[String]) -> Result<()> {
         CONFIG_FILE,
         CONFIG_DIR,
         STATE_DIR,
+        LOG_DIR,
         RUNTIME_DIR,
         &index_path,
         &admin_socket,

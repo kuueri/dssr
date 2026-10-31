@@ -15,6 +15,7 @@ use crate::config::{Config, decode_hex};
 use crate::harvest::{self, Harvester, SourceStatus};
 use crate::index::{Index, SearchQuery};
 use crate::log;
+use crate::searchlog::{self, SearchLog};
 
 pub const OPENAPI: &str = include_str!("openapi.json");
 
@@ -22,9 +23,10 @@ pub struct Server {
     idx: Arc<Index>,
     h: Harvester,
     sources: Vec<String>,
-    tokens: Vec<Vec<u8>>,
+    tokens: Vec<(String, Vec<u8>)>,
     version: String,
     started: DateTime<FixedOffset>,
+    search_log: Option<Arc<SearchLog>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -178,7 +180,13 @@ pub fn parse_query(v: &Values) -> Result<SearchQuery, &'static str> {
 }
 
 impl Server {
-    pub fn new(idx: Arc<Index>, h: Harvester, cfg: &Config, version: &str) -> Arc<Server> {
+    pub fn new(
+        idx: Arc<Index>,
+        h: Harvester,
+        cfg: &Config,
+        version: &str,
+        search_log: Option<Arc<SearchLog>>,
+    ) -> Arc<Server> {
         Arc::new(Server {
             idx,
             h,
@@ -186,27 +194,31 @@ impl Server {
             tokens: cfg
                 .clients
                 .iter()
-                .filter_map(|c| decode_hex(&c.token_sha256))
+                .filter_map(|c| decode_hex(&c.token_sha256).map(|h| (c.name.clone(), h)))
                 .collect(),
             version: version.to_string(),
             started: chrono::Local::now().fixed_offset(),
+            search_log,
         })
     }
 
-    fn authorized(&self, headers: &HeaderMap) -> bool {
+    fn client(&self, headers: &HeaderMap) -> Option<&str> {
         let value = headers
             .get(header::AUTHORIZATION)
             .and_then(|v| v.to_str().ok())
             .unwrap_or("");
-        let Some(tok) = value.strip_prefix("Bearer ") else {
-            return false;
-        };
-        let sum = Sha256::digest(tok.as_bytes());
-        let mut matched = 0u8;
-        for t in &self.tokens {
-            matched |= sum.as_slice().ct_eq(t).unwrap_u8();
+        let tok = value.strip_prefix("Bearer ")?;
+        if tok.is_empty() {
+            return None;
         }
-        !tok.is_empty() && matched == 1
+        let sum = Sha256::digest(tok.as_bytes());
+        let mut matched = None;
+        for (name, t) in &self.tokens {
+            if sum.as_slice().ct_eq(t).unwrap_u8() == 1 {
+                matched = Some(name.as_str());
+            }
+        }
+        matched
     }
 
     fn targets(&self, v: &Values) -> Vec<String> {
@@ -227,8 +239,9 @@ pub fn api(s: Arc<Server>) -> Router {
         .route(
             "/v1/search",
             get(|st: App, h: HeaderMap, q: RawQuery| async move {
-                if st.authorized(&h) {
-                    search(st, q).await
+                let client = st.client(&h).map(str::to_string);
+                if let Some(client) = client {
+                    search(st, q, Some(client)).await
                 } else {
                     unauthorized()
                 }
@@ -238,7 +251,7 @@ pub fn api(s: Arc<Server>) -> Router {
             "/v1/records/{source}/{*handle}",
             get(
                 |st: App, h: HeaderMap, p: Path<(String, String)>| async move {
-                    if st.authorized(&h) {
+                    if st.client(&h).is_some() {
                         record(st, p).await
                     } else {
                         unauthorized()
@@ -262,7 +275,7 @@ pub fn admin(s: Arc<Server>) -> Router {
             "/resume",
             post(|st: App, q: RawQuery| suspend(st, q, false)),
         )
-        .route("/search", get(search))
+        .route("/search", get(|st: App, q: RawQuery| search(st, q, None)))
         .route("/records/{source}/{*handle}", get(record))
         .with_state(s)
 }
@@ -278,15 +291,28 @@ fn values(q: RawQuery) -> Values {
     Values::parse(q.0.as_deref().unwrap_or(""))
 }
 
-async fn search(State(s): App, q: RawQuery) -> Response {
+async fn search(State(s): App, q: RawQuery, client: Option<String>) -> Response {
     let q = match parse_query(&values(q)) {
         Ok(q) => q,
         Err(e) => return problem(StatusCode::BAD_REQUEST, e),
     };
     let idx = s.idx.clone();
+    let query = q.clone();
     let text = q.q.clone();
-    match tokio::task::spawn_blocking(move || idx.search(&q).map_err(|e| e.to_string())).await {
-        Ok(Ok(res)) => ok(StatusCode::OK, res),
+    let started = std::time::Instant::now();
+    match tokio::task::spawn_blocking(move || idx.search(&query).map_err(|e| e.to_string())).await {
+        Ok(Ok(res)) => {
+            if let (Some(log), Some(client)) = (s.search_log.as_ref(), client) {
+                log.record(searchlog::event(
+                    &q,
+                    &res,
+                    &client,
+                    started.elapsed(),
+                    log.hits,
+                ));
+            }
+            ok(StatusCode::OK, res)
+        }
         Ok(Err(e)) => {
             log::error("search failed", &[("q", json!(text)), ("err", json!(e))]);
             problem(StatusCode::INTERNAL_SERVER_ERROR, "search failed")
@@ -399,7 +425,21 @@ mod tests {
     use crate::index::tests::{Temp, temp_dir};
     use crate::record::Record;
 
-    fn setup() -> (Temp, Arc<Server>) {
+    fn test_config() -> Config {
+        let mut cfg: Config = serde_norway::from_str("listen: x").unwrap();
+        cfg.clients = vec![Client {
+            name: "test".into(),
+            token_sha256: encode_hex(&Sha256::digest(b"secret")),
+        }];
+        cfg.sources = vec![Source {
+            id: "repo".into(),
+            schedule: "0 3 * * 1".into(),
+            ..Default::default()
+        }];
+        cfg
+    }
+
+    fn setup() -> (Temp, std::path::PathBuf, Arc<Server>) {
         let (t, dir) = temp_dir();
         let idx = Arc::new(Index::open(&dir).unwrap());
         let r = Record {
@@ -411,18 +451,9 @@ mod tests {
             ..Default::default()
         };
         idx.apply(&[r], &[], "1").unwrap();
-        let mut cfg: Config = serde_norway::from_str("listen: x").unwrap();
-        cfg.clients = vec![Client {
-            name: "test".into(),
-            token_sha256: encode_hex(&Sha256::digest(b"secret")),
-        }];
-        cfg.sources = vec![Source {
-            id: "repo".into(),
-            schedule: "0 3 * * 1".into(),
-            ..Default::default()
-        }];
+        let cfg = test_config();
         let h = Harvester::new(idx.clone(), cfg.sources.clone(), "dssr/test");
-        (t, Server::new(idx, h, &cfg, "test"))
+        (t, dir, Server::new(idx, h, &cfg, "test", None))
     }
 
     async fn call(app: &Router, method: &str, target: &str, token: &str) -> (u16, String, String) {
@@ -449,7 +480,7 @@ mod tests {
 
     #[tokio::test]
     async fn api_routes() {
-        let (_t, s) = setup();
+        let (_t, _dir, s) = setup();
         let app = api(s);
         for (target, token, want) in [
             ("/healthz", "", 200),
@@ -478,8 +509,43 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn api_search_is_logged() {
+        let (_t, dir, s) = setup();
+        let path = dir.join("search.log");
+        let cfg = crate::config::SearchLog {
+            output: path.to_str().unwrap().into(),
+            hits: 1,
+            max_size_mb: 64,
+        };
+        let (log, task) = crate::searchlog::start(&cfg).unwrap();
+        let s = Server::new(
+            s.idx.clone(),
+            s.h.clone(),
+            &test_config(),
+            "test",
+            Some(log),
+        );
+        call(&api(s.clone()), "GET", "/v1/search?q=wisata", "secret").await;
+        call(&admin(s.clone()), "GET", "/search?q=wisata", "").await;
+        call(&api(s.clone()), "GET", "/v1/search?q=wisata", "wrong").await;
+        drop(s);
+        task.await.unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        let lines: Vec<serde_json::Value> = text
+            .lines()
+            .map(|l| serde_json::from_str(l).unwrap())
+            .collect();
+        assert_eq!(lines.len(), 1);
+        assert_eq!(
+            (lines[0]["client"].as_str(), lines[0]["q"].as_str()),
+            (Some("test"), Some("wisata"))
+        );
+        assert_eq!(lines[0]["hits"][0]["id"], "repo:123456789/56");
+    }
+
+    #[tokio::test]
     async fn search_body() {
-        let (_t, s) = setup();
+        let (_t, _dir, s) = setup();
         let target = "/v1/search?q=%22wisata+ziarah%22&type=Thesis&year=2020";
         let (_, _, body) = call(&api(s), "GET", target, "secret").await;
         let res: SearchResult = serde_json::from_str(&body).unwrap();
@@ -497,7 +563,7 @@ mod tests {
 
     #[tokio::test]
     async fn status_orphans() {
-        let (_t, s) = setup();
+        let (_t, _dir, s) = setup();
         s.idx
             .apply(
                 &[Record {
@@ -522,7 +588,7 @@ mod tests {
 
     #[tokio::test]
     async fn admin_routes() {
-        let (_t, s) = setup();
+        let (_t, _dir, s) = setup();
         let app = admin(s);
         let (_, _, body) = call(&app, "GET", "/status", "").await;
         assert!(!body.contains("orphans"));
