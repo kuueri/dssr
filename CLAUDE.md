@@ -47,6 +47,7 @@ A harvest flows through `src/harvest.rs` (schedule), `src/oai.rs` (`ListRecords`
 Each document stores the full record as JSON in the stored field `record`, and search results and record lookups return that JSON.
 `index_path` holds `tantivy/` and `state.json`, which keeps the cursor, generation, and suspension of each source.
 `search_log` writes one JSON line per `/v1/search` request through a bounded channel and automatically numbered files (`search.log.01`, `.02`, and so on), and the unit grants `/var/log/dssr` through `LogsDirectory`.
+`deploy/dssr.service` sandboxes `serve` (exposure 1.2 in `systemd-analyze security`): no capabilities, only `AF_UNIX`, `AF_INET`, and `AF_INET6`, and `SystemCallFilter=@system-service ~@privileged @resources`, so a change that makes `serve` call `chown`, change priorities, or open another socket family fails with `EPERM` until the unit allows it.
 `serve` refuses an `index_path` that holds `index_meta.json`, the index of a release before 0.1.0, and asks for `sudo dssr reindex`, which recognizes that file too.
 Releases ship only `linux/amd64`, in two builds: `dssr_linux_amd64.tar.gz` is a static `x86_64-unknown-linux-musl` binary, and `dssr_linux_amd64_gnu.tar.gz` links the glibc of the build runner.
 `install.sh` installs the glibc build when it runs on the host and falls back to the musl build, which keeps the old asset name so the `install.sh` of earlier releases still finds it.
