@@ -61,14 +61,15 @@ Put a TLS reverse proxy in front of dssr before other hosts use the API.
 Edit `/etc/dssr/dssr.yaml`, then restart dssr with `sudo systemctl restart dssr`.
 dssr does not start if the file has an unknown key or an incorrect value.
 
-| Key            | Value                                                                                                                       |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `listen`       | TCP address of the HTTP API                                                                                                 |
-| `index_path`   | Directory of the index                                                                                                      |
-| `admin_socket` | Path of the unix socket for the `dssr` subcommands                                                                          |
-| `timezone`     | Time zone for the schedules                                                                                                 |
-| `clients`      | `name` and `token_sha256` of each client service                                                                            |
-| `sources`      | `id`, `name`, `oai_url`, `metadata_prefix` (`oai_dc` by default, or `dim`), and `schedule` (cron expression) of each source |
+| Key            | Value                                                                                                                                                                                                            |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `listen`       | TCP address of the HTTP API                                                                                                                                                                                      |
+| `index_path`   | Directory of the index                                                                                                                                                                                           |
+| `admin_socket` | Path of the unix socket for the `dssr` subcommands                                                                                                                                                               |
+| `timezone`     | Time zone for the schedules                                                                                                                                                                                      |
+| `clients`      | `name` and `token_sha256` of each client service                                                                                                                                                                 |
+| `sources`      | `id`, `name`, `oai_url`, `metadata_prefix` (`oai_dc` by default, or `dim`), and `schedule` (cron expression) of each source                                                                                      |
+| `search_log`   | `output` (`stdout` or an absolute file path), `hits` (results kept per search, 10 by default), and `max_size_mb` (file size that starts a rotation, 64 by default); without this key, dssr does not log searches |
 
 To replace the client token, for example when it is lost or leaked, run:
 
@@ -131,7 +132,7 @@ Run this command as root:
 sudo dssr uninstall
 ```
 
-It stops and disables the service, then removes the systemd unit, `/usr/local/bin/dssr`, `/usr/local/share/doc/dssr`, `/etc/dssr`, `/var/lib/dssr`, the index at `index_path`, the socket at `admin_socket`, and the `dssr` user and group, including the user's mail spool.
+It stops and disables the service, then removes the systemd unit, `/usr/local/bin/dssr`, `/usr/local/share/doc/dssr`, `/etc/dssr`, `/var/lib/dssr`, the search log at `/var/log/dssr`, the index at `index_path`, the socket at `admin_socket`, and the `dssr` user and group, including the user's mail spool.
 It deletes every harvested record, so the action cannot be undone.
 If a step fails, it keeps `/usr/local/bin/dssr`, so you can correct the cause and run the command again.
 The system journal keeps the old `dssr` entries, because journald has no per-unit deletion.
@@ -176,6 +177,30 @@ curl -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:8080/v1/search?q=wisata
 | `GET /v1/records/{source}/{handle}` | Get one record                              |
 | `GET /openapi.json`                 | Full API description, without a token       |
 | `GET /healthz`                      | Liveness check, without a token             |
+
+## Search log
+
+dssr does not log searches until `search_log` is in `dssr.yaml`.
+It logs only `/v1/search` requests, one JSON line each, with the client name and no IP address or token.
+
+With `output: stdout`, read the lines with:
+
+```bash
+journalctl -u dssr -o cat --no-pager | jq -c 'select(.msg == "search")'
+```
+
+With a file, use `/var/log/dssr/search.log`, because the service can write only under `/var/lib/dssr` and `/var/log/dssr`.
+The file rotates to `search.log.01`, then `search.log.02`, and so on, when it reaches `max_size_mb`.
+dssr does not delete old rotated files, so remove them yourself or manage them with logrotate.
+A line with `dropped` means dssr skipped that many searches because the disk was too slow.
+
+Queries without results:
+
+```bash
+jq -c 'select(.msg == "search" and .total == 0) | {q, filter}' /var/log/dssr/search.log
+```
+
+To make an eval case from a line, keep `q` and `filter`, add `expect` with the IDs of the records the query must find, and add the item to the YAML file for `dssr eval`.
 
 ## Important behavior
 

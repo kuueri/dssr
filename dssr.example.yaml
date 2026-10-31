@@ -3,6 +3,11 @@ listen: 127.0.0.1:8080
 index_path: ./data/index
 admin_socket: ./dssr.sock
 timezone: Asia/Jakarta
+# Log each API search as one JSON line, for dssr eval. Remove the comments to turn it on.
+# search_log:
+#   output: /var/log/dssr/search.log   # or stdout, for journald
+#   hits: 10                           # top results kept per search, 1 to 50
+#   max_size_mb: 64                    # the file rotates to search.log.01, .02, ... at this size
 clients:
   # Token "change-me". Make a real one with: printf '%s' "$TOKEN" | sha256sum
   - name: local-test
