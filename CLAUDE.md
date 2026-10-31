@@ -33,13 +33,15 @@ dssr is pull-only: it reaches each source only through the source's OAI-PMH endp
 ## Architecture
 
 `dssr serve` is the single owner of the index, because the tantivy writer holds an exclusive lock file in `index_path/tantivy`.
-Every subcommand except `update`, `reindex`, `revoke`, and `uninstall` is an HTTP client of the admin unix socket (`call` in `src/main.rs`), so it needs a running `serve`.
+Every subcommand except `update`, `reindex`, `remove`, `revoke`, `uninstall`, and `doctor` is an HTTP client of the admin unix socket (`call` in `src/main.rs`), so it needs a running `serve`.
 Members of the group `dssr` reach the socket without `sudo`, because `listen_unix` sets mode 0660 and the unit sets `RuntimeDirectoryMode=0750`.
 `dssr update` runs `install.sh` from the tag of the latest release, or of `DSSR_VERSION` when the operator sets it, with `DSSR_VERSION` set, never from `main`, so the installer matches the release files.
 `dssr reindex` stops the service, deletes the index directory, and starts the service, whose startup harvest then reads every record because the cursor went with the index.
+`dssr remove` stops the service, removes one source from the configuration, purges its documents and state from the index, gives the index files back to the owner of `index_path`, and starts the service.
+`dssr doctor` reads the configuration and the host directly and calls the admin socket only for the checks that need `serve`, so it also diagnoses a service that does not start.
 `dssr revoke` writes the hash of a new `sk-` token for the client `default` to the configuration and shows the token before it restarts the service, which revokes the previous token.
 `dssr uninstall` stops the service and removes the installation from the host.
-These run as root and do not contact `serve`.
+`update`, `reindex`, `remove`, `revoke`, and `uninstall` run as root and do not contact `serve`.
 
 A harvest flows through `src/harvest.rs` (schedule), `src/oai.rs` (`ListRecords` paging), `src/record.rs` (`dim` or `oai_dc` whitelist mapping), and `src/index/` (tantivy documents); `src/server.rs` serves the HTTP API and the admin socket.
 Each document stores the full record as JSON in the stored field `record`, and search results and record lookups return that JSON.

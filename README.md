@@ -22,12 +22,11 @@ dssr works with any source and relies only on published contracts: OAI-PMH 2.0 f
 
 ## Requirements
 
-| Resource | Minimum                                                                                                             |
-| -------- | ------------------------------------------------------------------------------------------------------------------- |
-| CPU      | 1 core, `x86_64` (`amd64`) only                                                                                     |
-| Memory   | 512 MB                                                                                                              |
-| Disk     | 1 GB free under `/var/lib/dssr`                                                                                     |
-| System   | Linux with systemd, plus `curl`, `awk`, `tar`, `sha256sum`, `od`, `install`, `useradd`, `usermod`, and `journalctl` |
+| Resource | Minimum                         |
+| -------- | ------------------------------- |
+| CPU      | 1 core, `x86_64` (`amd64`) only |
+| Memory   | 512 MB                          |
+| Disk     | 1 GB free under `/var/lib/dssr` |
 
 ## Install
 
@@ -47,6 +46,7 @@ The script does these steps:
 
 After the install, add each source under `sources` in `/etc/dssr/dssr.yaml` and restart dssr, as [Configure](#configure) describes.
 The first harvest of a source reads all its records.
+Run `dssr doctor` to check the installation and see the fix for each problem.
 
 When the script writes the file, it shows the client token one time.
 dssr keeps only the hash of the token, so store the token immediately, or make a new one later with `sudo dssr revoke`.
@@ -109,6 +109,20 @@ sudo dssr reindex
 It stops dssr, deletes the index at `index_path`, and starts dssr, which then harvests every record of each source again.
 Search results stay incomplete until each harvest ends, so run it only when every source answers OAI-PMH.
 
+## Remove a source
+
+To delete one source and all its records, run this command as root:
+
+```bash
+sudo dssr remove <id>
+```
+
+It stops dssr, removes the source from `/etc/dssr/dssr.yaml`, deletes its records, cursor, and suspension from the index, and starts dssr again.
+If the source is no longer in the configuration, it deletes only the records and state in the index.
+The command does not start while a harvest runs, because the restart would stop it.
+The restart starts the startup harvest of every other source.
+You cannot undo this command. To harvest the source again, add it to `/etc/dssr/dssr.yaml` and restart dssr.
+
 ## Uninstall
 
 Run this command as root:
@@ -139,6 +153,7 @@ dssr harvest --full
 | Command                               | Action                                                                     |
 | ------------------------------------- | -------------------------------------------------------------------------- |
 | `dssr status`                         | Show the record count, cursor, last run, and dropped fields of each source |
+| `dssr doctor`                         | Check the installation and show the fix for each problem                   |
 | `dssr search <query>`                 | Search with the same logic as the HTTP API                                 |
 | `dssr get <id>`                       | Show one record                                                            |
 | `dssr harvest [--source ID] [--full]` | Start a harvest now                                                        |
