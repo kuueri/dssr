@@ -38,7 +38,7 @@ curl -fsSL https://kuueri.com/dssr/install.sh | sudo bash
 
 The script does these steps:
 
-1. It downloads the latest release for `amd64` and checks the SHA-256 checksum.
+1. It downloads the latest release for `amd64` and checks the SHA-256 checksum. On a host with glibc, it uses the glibc build if that build runs there; otherwise it uses the static musl build, which runs on every Linux host.
 2. It installs `/usr/local/bin/dssr` and the systemd service `dssr`.
 3. It makes the system user `dssr` and adds the user that runs `sudo` to the group `dssr`.
 4. If `/etc/dssr/dssr.yaml` does not exist, it writes the file with a new client token and an example source in comments.
@@ -195,8 +195,8 @@ dssr builds and runs on Linux.
 | --------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | Stable Rust 1.90 or later through rustup, with `rustfmt` and `clippy` | Building, testing, and linting; nightly features are not allowed |
 | `shellcheck`                                                          | Checking `install.sh` and `scripts/package.sh`                   |
-| The rustup target `x86_64-unknown-linux-musl`                         | The static release binary                                        |
-| `musl-gcc` (Fedora `musl-gcc`, Debian and Ubuntu `musl-tools`)        | Compiling the C code of `ring` for the release binary            |
+| The rustup target `x86_64-unknown-linux-musl`                         | The static musl release binary                                   |
+| `musl-gcc` (Fedora `musl-gcc`, Debian and Ubuntu `musl-tools`)        | Compiling the C code of `ring` for the musl release binary       |
 | `jq`                                                                  | Collecting the dependency licenses in `scripts/package.sh`       |
 
 The tests start their own OAI-PMH and HTTP servers on `127.0.0.1` and need no network access.
@@ -218,7 +218,7 @@ target/release/dssr status --config dssr.yaml
 ```
 
 `dssr.yaml`, the index under `data/`, and the socket stay out of git.
-`bash scripts/package.sh X.Y.Z` builds the release archive in `dist/`, and it needs a `CHANGELOG.md` section for `X.Y.Z`.
+`bash scripts/package.sh X.Y.Z` builds the two release archives in `dist/`, `dssr_linux_amd64.tar.gz` (static musl) and `dssr_linux_amd64_gnu.tar.gz` (glibc of the build host), and it needs a `CHANGELOG.md` section for `X.Y.Z`.
 
 ## License
 
